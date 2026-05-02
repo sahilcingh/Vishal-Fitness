@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/main_layout.dart';
+import 'features/admin/admin_layout.dart';
 import 'core/widgets/connectivity_overlay.dart';
 
 final supabase = Supabase.instance.client;
@@ -152,6 +153,24 @@ class _GlobalThemeButtonState extends State<GlobalThemeButton> {
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
+  Future<String?> _getUserRole() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final response = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+      
+      return response?['role'] as String?;
+    } catch (e) {
+      debugPrint('Error fetching role in AuthGate: $e');
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // StreamBuilder listens to auth changes continuously in real-time
@@ -159,12 +178,30 @@ class AuthGate extends StatelessWidget {
       stream: supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
         // By checking the currentSession synchronously, we instantly know if the user
-        // was already logged in from a previous session (handled automatically by Supabase.initialize)
+        // was already logged in from a previous session
         final session = supabase.auth.currentSession;
 
         if (session != null) {
-          // User is verified and logged in. Send them directly to the Dashboard.
-          return const MainLayout();
+          return FutureBuilder<String?>(
+            future: _getUserRole(),
+            builder: (context, roleSnapshot) {
+              // While fetching the role, show a simple loading screen
+              if (roleSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(
+                    child: CircularProgressIndicator(color: AppColors.brand),
+                  ),
+                );
+              }
+
+              final role = roleSnapshot.data;
+              if (role == 'admin') {
+                return const AdminLayout();
+              }
+              // Default to Member dashboard
+              return const MainLayout();
+            },
+          );
         } else {
           // User is not logged in. Send them to the Welcome/Onboarding screen.
           return const WelcomeScreen();

@@ -366,7 +366,10 @@ class _MainLayoutState extends State<MainLayout> {
               context,
               Icons.delete_forever_outlined,
               'Delete Account',
-              () => _confirmAccountDeletion(context),
+              () {
+                Navigator.pop(context);
+                _confirmAccountDeletion(context);
+              },
               isDestructive: true,
             ),
           ],
@@ -430,17 +433,31 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Note: For a real production app, you should also call a Supabase function
-              // to delete user data from the 'profiles' and other tables.
-              await supabase.auth.admin.deleteUser(
-                supabase.auth.currentUser!.id,
-              );
-              await supabase.auth.signOut();
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => AuthGate()),
-                  (Route<dynamic> route) => false,
-                );
+              try {
+                // Call the custom RPC function to delete the user
+                // Make sure you have run the setup_delete_user.sql in Supabase SQL editor!
+                await supabase.rpc('delete_user_account');
+                
+                // Sign out just to be sure local state is cleared
+                await supabase.auth.signOut();
+                
+                if (mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const AuthGate()),
+                    (Route<dynamic> route) => false,
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context); // Close the dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting account: $e'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+                debugPrint('Error deleting account: $e');
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),

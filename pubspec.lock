@@ -456,6 +456,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.3.0"
+  ota_update:
+    dependency: "direct main"
+    description:
+      name: ota_update
+      sha256: "1f4c7c3c4f306729a6c00b84435096ce2d8b28439013f7237173acc699b2abc8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.1.0"
   package_config:
     dependency: transitive
     description:
@@ -641,7 +649,7 @@ packages:
     source: hosted
     version: "0.28.0"
   shared_preferences:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: shared_preferences
       sha256: c3025c5534b01739267eb7d76959bbc25a6d10f6988e1c2a3036940133dd10bf

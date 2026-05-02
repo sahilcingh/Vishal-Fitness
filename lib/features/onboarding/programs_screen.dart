@@ -1,70 +1,45 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import 'registration_details_screen.dart';
 
 class ProgramsScreen extends StatefulWidget {
-  const ProgramsScreen({super.key});
+  final String? prefillName;
+  final String? prefillPhone;
+  final String? prefillEmail;
+  final String? prefillPassword;
+
+  const ProgramsScreen({
+    super.key,
+    this.prefillName,
+    this.prefillPhone,
+    this.prefillEmail,
+    this.prefillPassword,
+  });
 
   @override
   State<ProgramsScreen> createState() => _ProgramsScreenState();
 }
 
-class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  int _selectedDurationIndex = 0; // Default to 3 months
+class _ProgramsScreenState extends State<ProgramsScreen> {
+  int _selectedDurationIndex = 1; // Default to 3 months
 
-  final List<String> _durations = ['3 Months', '6 Months', '12 Months'];
+  final List<String> _durations = ['1 Month', '3 Months', '6 Months', '12 Months'];
   
-  final Map<String, dynamic> _eliteData = <String, dynamic>{
-    'name': 'ELITE',
-    'tagline': 'Unlimited Access to Everything',
-    'gradient': AppColors.gradientSunrise,
-    'prices': ['₹14,990', '₹22,990', '₹34,990'],
-    'oldPrices': ['₹19,990', '₹32,990', '₹54,990'],
-    'features': <Map<String, dynamic>>[
-      {'text': 'Unlimited Gym Access', 'included': true},
-      {'text': 'Unlimited ELITE/PRO Classes', 'included': true},
-      {'text': 'At-home Workout Library', 'included': true},
-      {'text': 'Priority Booking & Concierge', 'included': true},
-      {'text': 'Free Workout Kit on Join', 'included': true},
-      {'text': '2 Guest Passes per Month', 'included': true},
-    ],
-  };
-
-  final Map<String, dynamic> _proData = <String, dynamic>{
-    'name': 'PRO',
-    'tagline': 'Premium Gym & Essential Classes',
+  final Map<String, dynamic> _passData = <String, dynamic>{
+    'name': 'VISHAL FITNESS',
+    'tagline': 'Premium Gym Experience in Unnao',
     'gradient': AppColors.gradientBrand,
-    'prices': ['₹9,990', '₹15,990', '₹24,990'],
-    'oldPrices': ['₹14,990', '₹24,990', '₹39,990'],
+    'prices': ['₹1,199', '₹2,999', '₹5,499', '₹8,999'],
+    'oldPrices': ['₹1,500', '₹3,500', '₹6,500', '₹10,500'],
     'features': <Map<String, dynamic>>[
       {'text': 'Unlimited Gym Access', 'included': true},
-      {'text': '2 Pro Classes per Week', 'included': true},
-      {'text': 'At-home Workout Library', 'included': true},
-      {'text': 'ELITE Classes Access', 'included': false},
-      {'text': 'Priority Booking', 'included': false},
-      {'text': 'Guest Passes', 'included': false},
+      {'text': 'Cardio & Strength Equipment', 'included': true},
+      {'text': 'Expert Guidance', 'included': true},
+      {'text': 'Free Gym Set', 'included': false},
     ],
   };
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,13 +57,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                   colorFilter: ColorFilter.mode(
                     context.isDark
                         ? Colors.black.withOpacity(0.65)
-                        : Colors.white.withOpacity(0.9), // Increased to 0.9 for almost solid background in light mode
+                        : Colors.white.withOpacity(0.9),
                     context.isDark ? BlendMode.darken : BlendMode.lighten,
                   ),
                 ),
               ),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Increased blur for better text isolation
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Container(color: Colors.transparent),
               ),
             ),
@@ -101,13 +76,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                 _buildHeader(context),
                 _buildDurationSelector(context),
                 Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPassDetails(_proData),
-                      _buildPassDetails(_eliteData),
-                    ],
-                  ),
+                  child: _buildPassDetails(_passData),
                 ),
                 _buildStickyFooter(),
               ],
@@ -157,30 +126,6 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
             ],
           ),
           const SizedBox(height: 24),
-          Container(
-            height: 52,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: context.card.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: context.border),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                color: context.fg,
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: context.primaryFg,
-              unselectedLabelColor: context.fg.withOpacity(0.7), // Increased opacity for unselected tabs
-              labelStyle: AppStyles.bodyFont.copyWith(fontWeight: FontWeight.bold),
-              tabs: const [
-                Tab(text: 'PRO'),
-                Tab(text: 'ELITE'),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -204,7 +149,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                 decoration: BoxDecoration(
                   color: isSelected 
                     ? AppColors.brand.withOpacity(0.15) 
-                    : context.card.withOpacity(0.8), // Increased card opacity for better surface
+                    : context.card.withOpacity(0.8),
                   borderRadius: BorderRadius.circular(AppStyles.radiusMd),
                   border: Border.all(
                     color: isSelected ? AppColors.brand : context.border,
@@ -216,13 +161,15 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      _durations[index],
+                      _durations[index].replaceAll(' ', '\n'), // Stack text for narrow boxes
+                      textAlign: TextAlign.center,
                       style: AppStyles.bodyFont.copyWith(
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w800,
-                        color: isSelected ? AppColors.brand : context.fg.withOpacity(0.8), // Darker text for unselected
+                        color: isSelected ? AppColors.brand : context.fg.withOpacity(0.8),
+                        height: 1.1,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                     ),
                   ),
                 ),
@@ -235,6 +182,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
   }
 
   Widget _buildPassDetails(Map<String, dynamic> data) {
+    // Determine if Gym Set is included for the current selection (6 or 12 months)
+    final bool includesGymSet = _selectedDurationIndex >= 2;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
       child: Column(
@@ -261,15 +211,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${data['name']} PASS',
+                      '${data['name']}\nPASS',
                       style: AppStyles.displayFont.copyWith(
                         color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900, // Maximized weight
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: 1.5,
+                        height: 1.1,
                       ),
                     ),
-                    if (_selectedDurationIndex == 2)
+                    if (_selectedDurationIndex == 3) // 12 Months
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -287,13 +238,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
                 Text(
                   data['tagline'],
                   style: AppStyles.bodyFont.copyWith(
                     color: Colors.white.withOpacity(0.95),
                     fontSize: 14,
-                    fontWeight: FontWeight.w700, // Increased from w500
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -321,6 +272,31 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                     ),
                   ],
                 ),
+                if (includesGymSet) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.sun,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.card_giftcard, size: 16, color: Colors.black87),
+                        const SizedBox(width: 8),
+                        Text(
+                          '+ FREE GYM SET INCLUDED',
+                          style: AppStyles.eyebrow.copyWith(
+                            color: Colors.black87,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -329,12 +305,18 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
             'WHAT\'S INCLUDED',
             style: AppStyles.eyebrow.copyWith(
               color: context.fg,
-              fontWeight: FontWeight.w900, // Heaviest weight for section title
+              fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 16),
           ... (data['features'] as List<Map<String, dynamic>>).map((feature) {
-            final isIncluded = feature['included'] as bool;
+            bool isIncluded = feature['included'] as bool;
+            
+            // Dynamic check for gym set feature
+            if (feature['text'] == 'Free Gym Set') {
+              isIncluded = includesGymSet;
+            }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
@@ -358,7 +340,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                       style: AppStyles.bodyFont.copyWith(
                         fontSize: 14,
                         color: isIncluded ? context.fg : context.fg.withOpacity(0.4),
-                        fontWeight: isIncluded ? FontWeight.w700 : FontWeight.w500, // Bolder for both states
+                        fontWeight: isIncluded ? FontWeight.w700 : FontWeight.w500,
                         decoration: isIncluded ? null : TextDecoration.lineThrough,
                       ),
                     ),
@@ -373,7 +355,6 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
   }
 
   Widget _buildStickyFooter() {
-    final currentData = _tabController.index == 0 ? _proData : _eliteData;
     return Container(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
       decoration: BoxDecoration(
@@ -388,7 +369,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  currentData['prices'][_selectedDurationIndex],
+                  _passData['prices'][_selectedDurationIndex],
                   style: AppStyles.displayFont.copyWith(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -396,10 +377,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                   ),
                 ),
                 Text(
-                  'for ${_durations[_selectedDurationIndex]}',
+                  'for ${_durations[_selectedDurationIndex].replaceAll('\n', ' ')}',
                   style: AppStyles.bodyFont.copyWith(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800, // Heavily bolded subtitle
+                    fontWeight: FontWeight.w800,
                     color: context.fg.withOpacity(0.8),
                   ),
                 ),
@@ -423,7 +404,35 @@ class _ProgramsScreenState extends State<ProgramsScreen> with SingleTickerProvid
                 ],
               ),
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  final passName = _passData['name'] as String;
+                  
+                  int durationDays = 30;
+                  if (_selectedDurationIndex == 1) { durationDays = 90; }
+                  else if (_selectedDurationIndex == 2) { durationDays = 180; }
+                  else if (_selectedDurationIndex == 3) { durationDays = 365; }
+
+                  final priceString = _passData['prices'][_selectedDurationIndex]
+                      .toString()
+                      .replaceAll('₹', '')
+                      .replaceAll(',', '');
+                  final price = double.tryParse(priceString) ?? 0.0;
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RegistrationDetailsScreen(
+                        durationDays: durationDays,
+                        price: price,
+                        passName: passName,
+                        prefillName: widget.prefillName,
+                        prefillPhone: widget.prefillPhone,
+                        prefillEmail: widget.prefillEmail,
+                        prefillPassword: widget.prefillPassword,
+                      ),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
