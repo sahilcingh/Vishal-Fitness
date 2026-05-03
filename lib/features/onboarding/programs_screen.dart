@@ -29,6 +29,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
   List<Map<String, dynamic>> _activePasses = [];
   bool _isLoading = true;
 
+  final List<LinearGradient> _passGradients = [
+    AppColors.gradientBrand,
+    AppColors.gradientEnergy,
+    AppColors.gradientCool,
+    AppColors.gradientSunrise,
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -175,6 +182,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         children: List.generate(_activePasses.length, (index) {
           final isSelected = _selectedPassIndex == index;
           final pass = _activePasses[index];
+          final Color passColor = _passGradients[index % _passGradients.length].colors[0];
+
           return Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _selectedPassIndex = index),
@@ -185,11 +194,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isSelected 
-                    ? AppColors.brand.withOpacity(0.15) 
+                    ? passColor.withOpacity(0.15) 
                     : context.card.withOpacity(0.8),
                   borderRadius: BorderRadius.circular(AppStyles.radiusMd),
                   border: Border.all(
-                    color: isSelected ? AppColors.brand : context.border,
+                    color: isSelected ? passColor : context.border,
                     width: isSelected ? 2 : 1,
                   ),
                 ),
@@ -203,7 +212,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                       style: AppStyles.bodyFont.copyWith(
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w800,
-                        color: isSelected ? AppColors.brand : context.fg.withOpacity(0.8),
+                        color: isSelected ? passColor : context.fg.withOpacity(0.8),
                         height: 1.1,
                       ),
                       maxLines: 2,
@@ -223,6 +232,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final NumberFormat formatter = NumberFormat('#,##0');
     final String price = formatter.format(pass['price']);
     final bool isBestValue = _selectedPassIndex == _activePasses.length - 1 && _activePasses.length > 1;
+    final LinearGradient currentGradient = _passGradients[_selectedPassIndex % _passGradients.length];
+    final Color shadowColor = currentGradient.colors[0];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
@@ -233,11 +244,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: AppColors.gradientBrand,
+              gradient: currentGradient,
               borderRadius: BorderRadius.circular(AppStyles.radiusLg),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.brand.withOpacity(0.3),
+                  color: shadowColor.withOpacity(0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -362,6 +373,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final pass = _activePasses[_selectedPassIndex];
     final NumberFormat formatter = NumberFormat('#,##0');
     final String priceText = formatter.format(pass['price']);
+    final LinearGradient currentGradient = _passGradients[_selectedPassIndex % _passGradients.length];
+    final Color shadowColor = currentGradient.colors[0];
 
     return Container(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
@@ -401,11 +414,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             child: Container(
               height: 54,
               decoration: BoxDecoration(
-                gradient: AppColors.gradientBrand,
+                gradient: currentGradient,
                 borderRadius: BorderRadius.circular(AppStyles.radiusMd),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.brand.withOpacity(0.3),
+                    color: shadowColor.withOpacity(0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
