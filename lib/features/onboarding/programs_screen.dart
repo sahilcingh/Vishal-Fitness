@@ -2,7 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../main.dart';
 import 'registration_details_screen.dart';
+import 'package:intl/intl.dart';
 
 class ProgramsScreen extends StatefulWidget {
   final String? prefillName;
@@ -23,23 +25,37 @@ class ProgramsScreen extends StatefulWidget {
 }
 
 class _ProgramsScreenState extends State<ProgramsScreen> {
-  int _selectedDurationIndex = 1; // Default to 3 months
+  int _selectedPassIndex = 0;
+  List<Map<String, dynamic>> _activePasses = [];
+  bool _isLoading = true;
 
-  final List<String> _durations = ['1 Month', '3 Months', '6 Months', '12 Months'];
-  
-  final Map<String, dynamic> _passData = <String, dynamic>{
-    'name': 'VISHAL FITNESS',
-    'tagline': 'Premium Gym Experience in Unnao',
-    'gradient': AppColors.gradientBrand,
-    'prices': ['₹1,199', '₹2,999', '₹5,499', '₹8,999'],
-    'oldPrices': ['₹1,500', '₹3,500', '₹6,500', '₹10,500'],
-    'features': <Map<String, dynamic>>[
-      {'text': 'Unlimited Gym Access', 'included': true},
-      {'text': 'Cardio & Strength Equipment', 'included': true},
-      {'text': 'Expert Guidance', 'included': true},
-      {'text': 'Free Gym Set', 'included': false},
-    ],
-  };
+  @override
+  void initState() {
+    super.initState();
+    _fetchPasses();
+  }
+
+  Future<void> _fetchPasses() async {
+    try {
+      final response = await supabase
+          .from('gym_passes')
+          .select()
+          .eq('is_active', true)
+          .order('duration_days', ascending: true);
+
+      if (mounted) {
+        setState(() {
+          _activePasses = List<Map<String, dynamic>>.from(response);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching active passes: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,19 +87,39 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
           
           // Content Layer
           SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(context),
-                _buildDurationSelector(context),
-                Expanded(
-                  child: _buildPassDetails(_passData),
-                ),
-                _buildStickyFooter(),
-              ],
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
+                : _activePasses.isEmpty
+                    ? _buildEmptyState(context)
+                    : Column(
+                        children: [
+                          _buildHeader(context),
+                          _buildDurationSelector(context),
+                          Expanded(
+                            child: _buildPassDetails(_activePasses[_selectedPassIndex]),
+                          ),
+                          _buildStickyFooter(),
+                        ],
+                      ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Column(
+      children: [
+        _buildHeader(context),
+        Expanded(
+          child: Center(
+            child: Text(
+              'No passes currently available.',
+              style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -136,14 +172,15 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: AppStyles.containerPadding),
       child: Row(
-        children: List.generate(_durations.length, (index) {
-          final isSelected = _selectedDurationIndex == index;
+        children: List.generate(_activePasses.length, (index) {
+          final isSelected = _selectedPassIndex == index;
+          final pass = _activePasses[index];
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _selectedDurationIndex = index),
+              onTap: () => setState(() => _selectedPassIndex = index),
               child: Container(
                 margin: EdgeInsets.only(
-                  right: index == _durations.length - 1 ? 0 : 8,
+                  right: index == _activePasses.length - 1 ? 0 : 8,
                 ),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
@@ -161,7 +198,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      _durations[index].replaceAll(' ', '\n'), // Stack text for narrow boxes
+                      pass['name'].toString().replaceAll(' ', '\n'), // Stack text for narrow boxes
                       textAlign: TextAlign.center,
                       style: AppStyles.bodyFont.copyWith(
                         fontSize: 12,
@@ -181,9 +218,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     );
   }
 
-  Widget _buildPassDetails(Map<String, dynamic> data) {
-    // Determine if Gym Set is included for the current selection (6 or 12 months)
-    final bool includesGymSet = _selectedDurationIndex >= 2;
+  Widget _buildPassDetails(Map<String, dynamic> pass) {
+    final List<dynamic> features = pass['features'] ?? [];
+    final NumberFormat formatter = NumberFormat('#,##0');
+    final String price = formatter.format(pass['price']);
+    final bool isBestValue = _selectedPassIndex == _activePasses.length - 1 && _activePasses.length > 1;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
@@ -194,11 +233,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: data['gradient'] as LinearGradient,
+              gradient: AppColors.gradientBrand,
               borderRadius: BorderRadius.circular(AppStyles.radiusLg),
               boxShadow: [
                 BoxShadow(
-                  color: (data['gradient'] as LinearGradient).colors[0].withOpacity(0.3),
+                  color: AppColors.brand.withOpacity(0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -211,16 +250,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${data['name']}\nPASS',
+                      'VISHAL FITNESS\n${pass['name'].toString().toUpperCase()}',
                       style: AppStyles.displayFont.copyWith(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.5,
                         height: 1.1,
                       ),
                     ),
-                    if (_selectedDurationIndex == 3) // 12 Months
+                    if (isBestValue)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -240,7 +279,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  data['tagline'],
+                  'Premium Gym Experience in Unnao',
                   style: AppStyles.bodyFont.copyWith(
                     color: Colors.white.withOpacity(0.95),
                     fontSize: 14,
@@ -252,51 +291,24 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      data['prices'][_selectedDurationIndex],
+                      '₹$price',
                       style: AppStyles.displayFont.copyWith(
                         color: Colors.white,
                         fontSize: 32,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Text(
-                      data['oldPrices'][_selectedDurationIndex],
+                      '/ ${pass['duration_days']} days',
                       style: AppStyles.bodyFont.copyWith(
                         color: Colors.white.withOpacity(0.7),
-                        fontSize: 18,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.lineThrough,
-                        decorationThickness: 2,
                       ),
                     ),
                   ],
                 ),
-                if (includesGymSet) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.sun,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.card_giftcard, size: 16, color: Colors.black87),
-                        const SizedBox(width: 8),
-                        Text(
-                          '+ FREE GYM SET INCLUDED',
-                          style: AppStyles.eyebrow.copyWith(
-                            color: Colors.black87,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -309,39 +321,31 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          ... (data['features'] as List<Map<String, dynamic>>).map((feature) {
-            bool isIncluded = feature['included'] as bool;
-            
-            // Dynamic check for gym set feature
-            if (feature['text'] == 'Free Gym Set') {
-              isIncluded = includesGymSet;
-            }
-
+          ... features.map((feature) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: isIncluded ? AppColors.brand : context.muted.withOpacity(0.8),
+                    decoration: const BoxDecoration(
+                      color: AppColors.brand,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
-                      isIncluded ? Icons.check : Icons.close,
+                    child: const Icon(
+                      Icons.check,
                       size: 12,
-                      color: isIncluded ? Colors.white : context.fg.withOpacity(0.3),
+                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      feature['text'] as String,
+                      feature.toString(),
                       style: AppStyles.bodyFont.copyWith(
                         fontSize: 14,
-                        color: isIncluded ? context.fg : context.fg.withOpacity(0.4),
-                        fontWeight: isIncluded ? FontWeight.w700 : FontWeight.w500,
-                        decoration: isIncluded ? null : TextDecoration.lineThrough,
+                        color: context.fg,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -355,6 +359,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
   }
 
   Widget _buildStickyFooter() {
+    final pass = _activePasses[_selectedPassIndex];
+    final NumberFormat formatter = NumberFormat('#,##0');
+    final String priceText = formatter.format(pass['price']);
+
     return Container(
       padding: const EdgeInsets.all(AppStyles.containerPadding),
       decoration: BoxDecoration(
@@ -369,7 +377,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _passData['prices'][_selectedDurationIndex],
+                  '₹$priceText',
                   style: AppStyles.displayFont.copyWith(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -377,7 +385,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   ),
                 ),
                 Text(
-                  'for ${_durations[_selectedDurationIndex].replaceAll('\n', ' ')}',
+                  'for ${pass['name']}',
                   style: AppStyles.bodyFont.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -405,26 +413,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               ),
               child: ElevatedButton(
                 onPressed: () {
-                  final passName = _passData['name'] as String;
-                  
-                  int durationDays = 30;
-                  if (_selectedDurationIndex == 1) { durationDays = 90; }
-                  else if (_selectedDurationIndex == 2) { durationDays = 180; }
-                  else if (_selectedDurationIndex == 3) { durationDays = 365; }
-
-                  final priceString = _passData['prices'][_selectedDurationIndex]
-                      .toString()
-                      .replaceAll('₹', '')
-                      .replaceAll(',', '');
-                  final price = double.tryParse(priceString) ?? 0.0;
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => RegistrationDetailsScreen(
-                        durationDays: durationDays,
-                        price: price,
-                        passName: passName,
+                        durationDays: pass['duration_days'],
+                        price: (pass['price'] as num).toDouble(),
+                        passName: pass['name'],
                         prefillName: widget.prefillName,
                         prefillPhone: widget.prefillPhone,
                         prefillEmail: widget.prefillEmail,
