@@ -28,6 +28,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   // OTP Verification State
   bool isOtpSent = false;
+  bool isForgotPasswordOtpSent = false;
 
   // Controllers
   final TextEditingController _nameController = TextEditingController();
@@ -35,6 +36,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
 
   @override
   void dispose() {
@@ -43,6 +45,7 @@ class _SignInScreenState extends State<SignInScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _otpController.dispose();
+    _newPasswordController.dispose();
     super.dispose();
   }
 
@@ -165,6 +168,38 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showError('Please enter your email address first to reset password.');
+      return;
+    }
+
+    setState(() => isLoading = true);
+    try {
+      final bool emailExists = await supabase.rpc(
+        'check_email_exists',
+        params: {'email_to_check': email},
+      );
+
+      if (!emailExists) {
+        _showError('This email is not registered.');
+        return;
+      }
+
+      await supabase.auth.resetPasswordForEmail(email);
+      setState(() {
+        isForgotPasswordOtpSent = true;
+      });
+    } on AuthException catch (e) {
+      _showError(e.message);
+    } catch (e) {
+      _showError('Error processing request: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
   // --- Step 2: OTP Verification Logic ---
   Future<void> _verifyOtp() async {
     final otp = _otpController.text.trim();
@@ -189,6 +224,106 @@ class _SignInScreenState extends State<SignInScreen> {
       _showError(e.message);
     } catch (e) {
       _showError('Invalid verification code.');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _verifyForgotPasswordOtp() async {
+    final otp = _otpController.text.trim();
+    final newPassword = _newPasswordController.text.trim();
+    final email = _emailController.text.trim();
+
+    if (otp.isEmpty || newPassword.isEmpty) {
+      _showError('Please enter the 6-digit code and a new password.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      _showError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (!RegExp(r'[!@#\$&*~`%^()_\-+={}\[\]|\\:;"<>,.?/]').hasMatch(newPassword)) {
+      _showError('Password must contain at least one special character.');
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      // 1. Verify OTP for recovery
+      await supabase.auth.verifyOTP(
+        type: OtpType.recovery,
+        token: otp,
+        email: email,
+      );
+
+      // 2. Update Password
+      await supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: context.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(context.r(20)),
+            ),
+            title: Row(
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  color: AppColors.brand,
+                  size: context.w(24),
+                ),
+                SizedBox(width: context.w(8)),
+                Text(
+                  'Success',
+                  style: AppStyles.displayFont.copyWith(
+                    fontSize: context.sp(20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Password updated successfully. You can now sign in.',
+              style: AppStyles.bodyFont.copyWith(
+                fontSize: context.sp(14),
+                color: context.fg,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    isForgotPasswordOtpSent = false;
+                    _passwordController.clear();
+                    _otpController.clear();
+                    _newPasswordController.clear();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(context.r(12)),
+                  ),
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      _showError(e.message);
+    } catch (e) {
+      _showError('Invalid verification code or error updating password.');
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -567,7 +702,9 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
             Padding(
               padding: EdgeInsets.all(context.w(24)),
-              child: isOtpSent ? _buildOtpForm() : _buildStandardAuthForm(),
+              child: isForgotPasswordOtpSent
+                  ? _buildForgotPasswordForm()
+                  : (isOtpSent ? _buildOtpForm() : _buildStandardAuthForm()),
             ),
           ],
         ),
@@ -753,7 +890,28 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
           SizedBox(height: context.h(12)),
         ] else ...[
-          SizedBox(height: context.h(24)),
+          if (isSignIn) ...[
+            SizedBox(height: context.h(12)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: _handleForgotPassword,
+                  child: Text(
+                    'Forgot Password?',
+                    style: AppStyles.bodyFont.copyWith(
+                      color: AppColors.brand,
+                      fontSize: context.sp(13),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: context.h(12)),
+          ] else ...[
+            SizedBox(height: context.h(24)),
+          ],
         ],
 
         // Primary Action Button
@@ -843,6 +1001,131 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  // --- FORGOT PASSWORD OTP FORM ---
+  Widget _buildForgotPasswordForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: context.h(8)),
+        Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(context.w(8)),
+              decoration: BoxDecoration(
+                color: AppColors.energy.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.lock_reset,
+                color: AppColors.energy,
+                size: context.w(20),
+              ),
+            ),
+            SizedBox(width: context.w(12)),
+            Text(
+              'RESET PASSWORD',
+              style: AppStyles.eyebrow.copyWith(
+                color: context.fg,
+                fontSize: context.sp(14),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: context.h(16)),
+        Text(
+          "We've sent a 6-digit secure code to\n${_emailController.text}",
+          style: AppStyles.bodyFont.copyWith(
+            color: context.mutedFg,
+            height: 1.5,
+            fontSize: context.sp(14),
+          ),
+        ),
+        SizedBox(height: context.h(24)),
+
+        _buildInputLabel('VERIFICATION CODE'),
+        _buildTextField(
+          _otpController,
+          '123456',
+          TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+        ),
+        SizedBox(height: context.h(20)),
+
+        _buildInputLabel('NEW PASSWORD'),
+        _buildTextField(
+          _newPasswordController,
+          '••••••••',
+          TextInputType.visiblePassword,
+          isObscured: true,
+        ),
+        SizedBox(height: context.h(24)),
+
+        // Verify & Update Button
+        Container(
+          width: double.infinity,
+          height: context.h(52),
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientBrand,
+            borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
+          ),
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _verifyForgotPasswordOtp,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  context.r(AppStyles.radiusMd),
+                ),
+              ),
+              disabledBackgroundColor: Colors.transparent,
+            ),
+            child: isLoading
+                ? SizedBox(
+                    height: context.w(24),
+                    width: context.w(24),
+                    child: CircularProgressIndicator(
+                      color: context.primaryColor,
+                      strokeWidth: 3,
+                    ),
+                  )
+                : Text(
+                    'Verify & Update',
+                    style: AppStyles.bodyFont.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: context.sp(16),
+                      color: context.primaryColor,
+                    ),
+                  ),
+          ),
+        ),
+        SizedBox(height: context.h(16)),
+
+        // Cancel / Back Button
+        Center(
+          child: TextButton(
+            onPressed: () => setState(() {
+              isForgotPasswordOtpSent = false;
+              _otpController.clear();
+              _newPasswordController.clear();
+            }),
+            child: Text(
+              'Cancel',
+              style: AppStyles.bodyFont.copyWith(
+                color: context.mutedFg,
+                fontWeight: FontWeight.w500,
+                fontSize: context.sp(14),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

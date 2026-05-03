@@ -212,12 +212,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final NumberFormat formatter = NumberFormat('#,##0');
     final data = _chartData;
     final volumes = data.map((d) => d['volume'] as double).toList();
+    final isDark = context.isDark;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.card,
         borderRadius: BorderRadius.circular(AppStyles.radiusLg),
         border: Border.all(color: context.border.withOpacity(0.5)),
         boxShadow: [
@@ -236,9 +238,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
             child: Container(
               width: 200,
               height: 200,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFE2F8EB),
+                color: isDark 
+                    ? AppColors.brand.withOpacity(0.05) 
+                    : const Color(0xFFE2F8EB),
               ),
             ),
           ),
@@ -248,9 +252,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
             child: Container(
               width: 150,
               height: 150,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFE5F6FF),
+                color: isDark 
+                    ? AppColors.aqua.withOpacity(0.05)
+                    : const Color(0xFFE5F6FF),
               ),
             ),
           ),
