@@ -429,71 +429,76 @@ class _SignInScreenState extends State<SignInScreen> {
             child: _buildBackgroundImage(context, key: ValueKey(isAdminMode)),
           ),
           SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: context.w(AppStyles.containerPadding),
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      SizedBox(height: context.h(16)),
-                      _buildLogoAndEyebrow(context),
-                      SizedBox(height: context.h(16)),
-                      _buildMainHeading(context),
-                      SizedBox(height: context.h(8)),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Text(
-                          isAdminMode
-                              ? 'Enter secure credentials to access the gym command center and manage operations.'
-                              : 'Your streak is waiting. Let\'s pick up where you\nleft off.',
-                          key: ValueKey(isAdminMode),
-                          style: AppStyles.bodyFont.copyWith(
-                            color: context.mutedFg,
-                            height: 1.5,
-                            fontSize: context.sp(14),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.w(AppStyles.containerPadding),
+                      ),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          SizedBox(height: context.h(16)),
+                          _buildLogoAndEyebrow(context),
+                          SizedBox(height: context.h(16)),
+                          _buildMainHeading(context),
+                          SizedBox(height: context.h(8)),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: Text(
+                              isAdminMode
+                                  ? 'Enter secure credentials to access the gym command center and manage operations.'
+                                  : 'Your streak is waiting. Let\'s pick up where you\nleft off.',
+                              key: ValueKey(isAdminMode),
+                              style: AppStyles.bodyFont.copyWith(
+                                color: context.mutedFg,
+                                height: 1.5,
+                                fontSize: context.sp(14),
+                              ),
+                            ),
                           ),
+                          SizedBox(height: context.h(24)),
+
+                          // Wrap in AnimatedSize so the card smoothly expands when fields are added
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOutCubic,
+                            child: _buildAuthCard(context),
+                          ),
+
+                          SizedBox(height: context.h(24)),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: _buildFeaturePills(
+                              context,
+                              key: ValueKey(isAdminMode),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      fillOverscroll: true,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: context.w(AppStyles.containerPadding),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            SizedBox(height: context.h(20)),
+                            _buildAdminToggle(context),
+                            SizedBox(height: context.h(16)),
+                          ],
                         ),
                       ),
-                      SizedBox(height: context.h(24)),
-
-                      // Wrap in AnimatedSize so the card smoothly expands when fields are added
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOutCubic,
-                        child: _buildAuthCard(context),
-                      ),
-
-                      SizedBox(height: context.h(24)),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: _buildFeaturePills(
-                          context,
-                          key: ValueKey(isAdminMode),
-                        ),
-                      ),
-                    ]),
-                  ),
-                ),
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  fillOverscroll: true,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: context.w(AppStyles.containerPadding),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(height: context.h(20)),
-                        _buildAdminToggle(context),
-                        SizedBox(height: context.h(16)),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -612,11 +617,13 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             SizedBox(width: context.w(8)),
-            Text(
-              isAdminMode ? 'SECURE ACCESS' : 'WELCOME BACK',
-              style: AppStyles.eyebrow.copyWith(
-                color: context.mutedFg,
-                fontSize: context.sp(10),
+            Flexible(
+              child: Text(
+                isAdminMode ? 'SECURE ACCESS' : 'WELCOME BACK',
+                style: AppStyles.eyebrow.copyWith(
+                  color: context.mutedFg,
+                  fontSize: context.sp(10),
+                ),
               ),
             ),
           ],
@@ -791,11 +798,13 @@ class _SignInScreenState extends State<SignInScreen> {
                 size: context.w(18),
               ),
               SizedBox(width: context.w(8)),
-              Text(
-                'AUTHORIZED PERSONNEL ONLY',
-                style: AppStyles.eyebrow.copyWith(
-                  color: AppColors.aqua,
-                  fontSize: context.sp(10),
+              Flexible(
+                child: Text(
+                  'AUTHORIZED PERSONNEL ONLY',
+                  style: AppStyles.eyebrow.copyWith(
+                    color: AppColors.aqua,
+                    fontSize: context.sp(10),
+                  ),
                 ),
               ),
             ],
@@ -879,11 +888,14 @@ class _SignInScreenState extends State<SignInScreen> {
                 size: context.w(12),
               ),
               SizedBox(width: context.w(4)),
-              Text(
-                'Biometrics enabled',
-                style: AppStyles.eyebrow.copyWith(
-                  color: context.mutedFg,
-                  fontSize: context.sp(9),
+              Flexible(
+                child: Text(
+                  'Biometrics enabled',
+                  style: AppStyles.eyebrow.copyWith(
+                    color: context.mutedFg,
+                    fontSize: context.sp(9),
+                  ),
+                  textAlign: TextAlign.end,
                 ),
               ),
             ],
@@ -893,9 +905,10 @@ class _SignInScreenState extends State<SignInScreen> {
           if (isSignIn) ...[
             SizedBox(height: context.h(12)),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                GestureDetector(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(
+                child: GestureDetector(
                   onTap: _handleForgotPassword,
                   child: Text(
                     'Forgot Password?',
@@ -904,11 +917,12 @@ class _SignInScreenState extends State<SignInScreen> {
                       fontSize: context.sp(13),
                       fontWeight: FontWeight.w600,
                     ),
+                    textAlign: TextAlign.end,
                   ),
                 ),
-              ],
-            ),
-            SizedBox(height: context.h(12)),
+              ),
+            ],
+            ),            SizedBox(height: context.h(12)),
           ] else ...[
             SizedBox(height: context.h(24)),
           ],
@@ -948,14 +962,17 @@ class _SignInScreenState extends State<SignInScreen> {
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        isAdminMode
-                            ? 'Authenticate'
-                            : (isSignIn ? 'Sign in' : 'Choose Pass & Sign Up'),
-                        style: AppStyles.bodyFont.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: context.sp(16),
-                          color: context.primaryColor,
+                      Flexible(
+                        child: Text(
+                          isAdminMode
+                              ? 'Authenticate'
+                              : (isSignIn ? 'Sign in' : 'Choose Pass & Sign Up'),
+                          style: AppStyles.bodyFont.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: context.sp(16),
+                            color: context.primaryColor,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       SizedBox(width: context.w(8)),
@@ -1026,11 +1043,13 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             SizedBox(width: context.w(12)),
-            Text(
-              'RESET PASSWORD',
-              style: AppStyles.eyebrow.copyWith(
-                color: context.fg,
-                fontSize: context.sp(14),
+            Flexible(
+              child: Text(
+                'RESET PASSWORD',
+                style: AppStyles.eyebrow.copyWith(
+                  color: context.fg,
+                  fontSize: context.sp(14),
+                ),
               ),
             ),
           ],
@@ -1151,11 +1170,13 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             SizedBox(width: context.w(12)),
-            Text(
-              'VERIFY EMAIL',
-              style: AppStyles.eyebrow.copyWith(
-                color: context.fg,
-                fontSize: context.sp(14),
+            Flexible(
+              child: Text(
+                'VERIFY EMAIL',
+                style: AppStyles.eyebrow.copyWith(
+                  color: context.fg,
+                  fontSize: context.sp(14),
+                ),
               ),
             ),
           ],
@@ -1399,12 +1420,15 @@ class _SignInScreenState extends State<SignInScreen> {
               size: context.w(14),
             ),
             SizedBox(width: context.w(6)),
-            Text(
-              isAdminMode ? 'RETURN TO MEMBER LOGIN' : 'STAFF / ADMIN ACCESS',
-              style: AppStyles.eyebrow.copyWith(
-                color: context.mutedFg.withOpacity(0.5),
-                letterSpacing: 2.5,
-                fontSize: context.sp(10),
+            Flexible(
+              child: Text(
+                isAdminMode ? 'RETURN TO MEMBER LOGIN' : 'STAFF / ADMIN ACCESS',
+                style: AppStyles.eyebrow.copyWith(
+                  color: context.mutedFg.withOpacity(0.5),
+                  letterSpacing: 2.5,
+                  fontSize: context.sp(10),
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
           ],
