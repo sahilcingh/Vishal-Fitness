@@ -4,7 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../../main.dart'; // Import to access the global 'supabase' client
+import '../../core/widgets/shimmer_box.dart';
+import '../../main.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,52 +16,116 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String _displayName = '';
-  bool _isLoadingName = true;
+  int _streak = 0;
+  double _weekVolume = 0;
+  int _weekSessions = 0;
+  List<Map<String, dynamic>> _upcomingClasses = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserProfile();
+    _fetchDashboardData();
   }
 
-  Future<void> _fetchUserProfile() async {
+  Future<void> _fetchDashboardData() async {
     try {
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      // Query the profiles table for this specific user
-      final data = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .maybeSingle();
+      final now = DateTime.now();
+      final sevenDaysAgo =
+          now.subtract(const Duration(days: 7)).toIso8601String();
+      final sixtyDaysAgo =
+          now.subtract(const Duration(days: 60)).toIso8601String();
 
-      final fullName = data != null ? data['full_name'] as String? : null;
+      final results = await Future.wait([
+        supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle(),
+        supabase
+            .from('check_ins')
+            .select('checked_in_at')
+            .eq('user_id', user.id)
+            .gte('checked_in_at', sixtyDaysAgo)
+            .order('checked_in_at', ascending: false),
+        supabase
+            .from('workout_logs')
+            .select('volume_kg')
+            .eq('user_id', user.id)
+            .gte('performed_at', sevenDaysAgo),
+        supabase
+            .from('classes')
+            .select('title, start_time')
+            .gt('start_time', now.toIso8601String())
+            .order('start_time', ascending: true)
+            .limit(2),
+      ]);
+
+      final profileData = results[0] as Map<String, dynamic>?;
+      final checkIns =
+          List<Map<String, dynamic>>.from(results[1] as List);
+      final weekLogs =
+          List<Map<String, dynamic>>.from(results[2] as List);
+      final classes =
+          List<Map<String, dynamic>>.from(results[3] as List);
+
+      final fullName = profileData?['full_name'] as String?;
+      String displayName;
+      if (fullName != null && fullName.isNotEmpty) {
+        displayName = fullName;
+      } else {
+        final emailPrefix = user.email?.split('@')[0] ?? 'Athlete';
+        displayName =
+            emailPrefix[0].toUpperCase() + emailPrefix.substring(1);
+      }
+
+      final weekVolume = weekLogs.fold(
+          0.0, (sum, l) => sum + (l['volume_kg'] as num).toDouble());
 
       if (mounted) {
         setState(() {
-          if (fullName != null && fullName.isNotEmpty) {
-            _displayName = fullName;
-          } else {
-            // Smart fallback: If they haven't set a name yet, use their email prefix
-            // e.g., 'sahil@gym.com' becomes 'Sahil'
-            final emailPrefix = user.email?.split('@')[0] ?? 'Athlete';
-            // Capitalize the first letter
-            _displayName =
-                emailPrefix[0].toUpperCase() + emailPrefix.substring(1);
-          }
-          _isLoadingName = false;
+          _displayName = displayName;
+          _streak = _computeStreak(checkIns);
+          _weekVolume = weekVolume;
+          _weekSessions = weekLogs.length;
+          _upcomingClasses = classes;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // If there's an error fetching, fallback gracefully
+      debugPrint('Error fetching dashboard data: $e');
       if (mounted) {
         setState(() {
           _displayName = 'Athlete';
-          _isLoadingName = false;
+          _isLoading = false;
         });
       }
     }
+  }
+
+  int _computeStreak(List<Map<String, dynamic>> checkIns) {
+    if (checkIns.isEmpty) return 0;
+    final Set<String> checkInDates = {};
+    for (final ci in checkIns) {
+      final dt = DateTime.parse(ci['checked_in_at']).toLocal();
+      checkInDates.add(DateFormat('yyyy-MM-dd').format(dt));
+    }
+    final today = DateTime.now();
+    int streak = 0;
+    DateTime current = DateTime(today.year, today.month, today.day);
+    while (true) {
+      final key = DateFormat('yyyy-MM-dd').format(current);
+      if (checkInDates.contains(key)) {
+        streak++;
+        current = current.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+    return streak;
   }
 
   String _getTimeBasedGreeting() {
@@ -70,43 +135,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'Good evening,';
   }
 
+  Widget _buildSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppStyles.containerPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          // Date header
+          const ShimmerBox(width: 120, height: 12, radius: 6),
+          const SizedBox(height: 32),
+          // Greeting
+          const ShimmerBox(width: 160, height: 20, radius: 6),
+          const SizedBox(height: 10),
+          const ShimmerBox(width: 220, height: 32, radius: 8),
+          const SizedBox(height: 32),
+          // Streak card
+          const ShimmerBoxDark(height: 180, radius: 20),
+          const SizedBox(height: 16),
+          // Stat cards
+          Row(
+            children: const [
+              Expanded(child: ShimmerBox(height: 110, radius: 20)),
+              SizedBox(width: 16),
+              Expanded(child: ShimmerBox(height: 110, radius: 20)),
+            ],
+          ),
+          const SizedBox(height: 32),
+          // UP NEXT label
+          const ShimmerBox(width: 140, height: 12, radius: 6),
+          const SizedBox(height: 16),
+          // UP NEXT card
+          const ShimmerBox(height: 72, radius: 20),
+          const SizedBox(height: 32),
+          // Leaderboard label
+          const ShimmerBox(width: 180, height: 12, radius: 6),
+          const SizedBox(height: 16),
+          const ShimmerBox(height: 64, radius: 20),
+          const SizedBox(height: 120),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.transparent, // Let MainLayout background show through
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppStyles.containerPadding,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            _buildTopHeader(),
-            const SizedBox(height: 24),
-            _buildGreeting(),
-            const SizedBox(height: 32),
-            _buildStreakCard()
-                .animate(key: ValueKey('streak_anim_${DateTime.now().second}')) // Dynamic key to trigger animation
-                .scale(
-                  duration: 600.ms,
-                  curve: Curves.easeOutBack,
-                  begin: const Offset(0.8, 0.8),
-                )
-                .fadeIn(duration: 400.ms),
-            const SizedBox(height: 16),
-            _buildStatCards(),
-            const SizedBox(height: 32),
-            _buildLiveStatus(), // Added to main display list
-            const SizedBox(height: 32),
-            _buildUpNextSection(),
-            const SizedBox(height: 32),
-            _buildLeaderboard(), // NEW: Community Leaderboard
-            const SizedBox(height: 48),
-            _buildFooter(context),
-            const SizedBox(height: 120),
-          ],
+      backgroundColor: Colors.transparent,
+      body: _isLoading
+          ? _buildSkeleton()
+          : RefreshIndicator(
+        color: AppColors.brand,
+        onRefresh: _fetchDashboardData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppStyles.containerPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              _buildTopHeader(),
+              const SizedBox(height: 24),
+              _buildGreeting(),
+              const SizedBox(height: 32),
+              _buildStreakCard()
+                  .animate(
+                    key: ValueKey('streak_anim_${DateTime.now().second}'),
+                  )
+                  .scale(
+                    duration: 600.ms,
+                    curve: Curves.easeOutBack,
+                    begin: const Offset(0.8, 0.8),
+                  )
+                  .fadeIn(duration: 400.ms),
+              const SizedBox(height: 16),
+              _buildStatCards(),
+              const SizedBox(height: 32),
+              _buildUpNextSection(),
+              const SizedBox(height: 32),
+              _buildComingSoon(
+                'TOP ATHLETES THIS WEEK',
+                'Leaderboard launching soon',
+                AppColors.sun,
+                Icons.emoji_events_outlined,
+              ),
+              const SizedBox(height: 48),
+              _buildFooter(context),
+              const SizedBox(height: 120),
+            ],
+          ),
         ),
       ),
     );
@@ -117,27 +238,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final dateStr = DateFormat('EEE · d MMM').format(now).toUpperCase();
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        const Icon(Icons.auto_awesome, size: 16, color: AppColors.energy),
+        const SizedBox(width: 8),
         Expanded(
-          child: Row(
-            children: [
-              const Icon(Icons.auto_awesome, size: 16, color: AppColors.energy),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    dateStr,
-                    style: AppStyles.eyebrow.copyWith(
-                      color: context.mutedFg,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              dateStr,
+              style: AppStyles.eyebrow
+                  .copyWith(color: context.mutedFg, letterSpacing: 1.5),
+            ),
           ),
         ),
       ],
@@ -150,12 +262,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           _getTimeBasedGreeting(),
-          style: Theme.of(
-            context,
-          ).textTheme.displayLarge?.copyWith(fontSize: 32, height: 1.1),
+          style: Theme.of(context)
+              .textTheme
+              .displayLarge
+              ?.copyWith(fontSize: 32, height: 1.1),
         ),
-        // Use a loading skeleton or the actual name
-        _isLoadingName
+        _isLoading
             ? Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Container(
@@ -171,16 +283,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 blendMode: BlendMode.srcIn,
                 shaderCallback: (bounds) =>
                     AppColors.gradientSunrise.createShader(
-                      Rect.fromLTWH(0, 0, bounds.width, bounds.height),
-                    ),
+                  Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+                ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     '$_displayName.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.displayLarge?.copyWith(fontSize: 32, height: 1.1),
+                    style: Theme.of(context)
+                        .textTheme
+                        .displayLarge
+                        ?.copyWith(fontSize: 32, height: 1.1),
                     maxLines: 2,
                   ),
                 ),
@@ -189,46 +302,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildLiveStatus() {
-    final isDark = context.isDark;
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: AppColors.brand,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text.rich(
-            TextSpan(
-              style: AppStyles.bodyFont.copyWith(
-                color: isDark ? Colors.white70 : context.mutedFg,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-              children: [
-                TextSpan(
-                  text: '147 ',
-                  style: AppStyles.numTabular.copyWith(
-                    color: isDark ? Colors.white : context.fg,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const TextSpan(text: 'athletes training right now'),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildStreakCard() {
     final isDark = context.isDark;
+    final streakText = _streak == 0
+        ? "Start your streak with today's check-in."
+        : _streak == 1
+            ? 'Great start! Come back tomorrow to keep it going.'
+            : 'You\'re on fire! Keep the streak alive.';
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -238,23 +319,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  const Color(0xFF222222), // Lighter surface for dark mode
+                  const Color(0xFF222222),
                   const Color(0xFF1A1A1A),
                   const Color(0xFF111111),
                 ]
               : [
-                  const Color(0xFF0F0F0F), // Rich black for light mode contrast
+                  const Color(0xFF0F0F0F),
                   const Color(0xFF252525),
                 ],
         ),
-        border: isDark 
-            ? Border.all(color: Colors.white.withOpacity(0.1), width: 1)
+        border: isDark
+            ? Border.all(
+                color: Colors.white.withValues(alpha: 0.1), width: 1)
             : null,
         boxShadow: [
           BoxShadow(
-            color: isDark 
-                ? AppColors.pulse.withOpacity(0.15) // Violet glow in dark mode
-                : AppColors.energy.withOpacity(0.3), // Orange glow in light mode
+            color: isDark
+                ? AppColors.pulse.withValues(alpha: 0.15)
+                : AppColors.energy.withValues(alpha: 0.3),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -269,7 +351,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: Row(
                   children: [
-                    Icon(Icons.bolt, color: isDark ? AppColors.brand : AppColors.sun, size: 16),
+                    Icon(Icons.bolt,
+                        color: isDark ? AppColors.brand : AppColors.sun,
+                        size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: FittedBox(
@@ -292,13 +376,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: isDark ? AppColors.gradientBrand : AppColors.gradientEnergy,
+                    gradient: isDark
+                        ? AppColors.gradientBrand
+                        : AppColors.gradientEnergy,
                   ),
                   child: const Icon(
                     Icons.local_fire_department,
@@ -317,11 +403,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ShaderMask(
                 blendMode: BlendMode.srcIn,
                 shaderCallback: (bounds) =>
-                    (isDark ? AppColors.gradientBrand : AppColors.gradientEnergy).createShader(
-                      Rect.fromLTWH(0, 0, bounds.width, bounds.height),
-                    ),
+                    (isDark
+                            ? AppColors.gradientBrand
+                            : AppColors.gradientEnergy)
+                        .createShader(
+                  Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+                ),
                 child: Text(
-                  '0',
+                  '$_streak',
                   style: AppStyles.displayFont.copyWith(
                     fontSize: 56,
                     height: 1.0,
@@ -349,7 +438,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   height: 4,
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.brand.withOpacity(0.3) : Colors.white.withOpacity(0.15),
+                    color: index < _streak.clamp(0, 12)
+                        ? (isDark
+                            ? AppColors.brand
+                            : Colors.white.withValues(alpha: 0.85))
+                        : (isDark
+                            ? AppColors.brand.withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.15)),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -358,9 +453,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            "Start your streak with today's check-in.",
+            streakText,
             style: AppStyles.bodyFont.copyWith(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -371,12 +466,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildStatCards() {
+    final fmt = NumberFormat('#,##0');
     return Row(
       children: [
         Expanded(
           child: _buildStatCard(
             label: 'WEEK\nVOLUME',
-            value: '2,113 kg',
+            value: _isLoading ? '—' : '${fmt.format(_weekVolume)} kg',
             icon: Icons.trending_up,
             iconColor: Colors.black,
             iconBgColor: AppColors.aqua,
@@ -387,7 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Expanded(
           child: _buildStatCard(
             label: 'SESSIONS /\n7D',
-            value: '1',
+            value: _isLoading ? '—' : '$_weekSessions',
             icon: Icons.calendar_today,
             iconColor: Colors.black,
             iconBgColor: AppColors.pulse,
@@ -412,11 +508,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: isDark ? const Color(0xFF1A1A1A) : context.card,
         borderRadius: BorderRadius.circular(AppStyles.radiusLg),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.05) : context.border.withOpacity(0.5),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : context.border.withValues(alpha: 0.5),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            color:
+                Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -434,7 +533,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: tintColor.withOpacity(isDark ? 0.05 : 0.8),
+                  color: tintColor
+                      .withValues(alpha: isDark ? 0.05 : 0.8),
                 ),
               ),
             ),
@@ -451,9 +551,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Text(
                           label,
                           style: AppStyles.eyebrow.copyWith(
-                            color: isDark ? Colors.white70 : context.mutedFg,
+                            color: isDark
+                                ? Colors.white70
+                                : context.mutedFg,
                             height: 1.4,
-                            fontWeight: isDark ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: isDark
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                           softWrap: true,
                         ),
@@ -462,10 +566,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: isDark ? iconBgColor.withOpacity(0.2) : iconBgColor,
+                          color: isDark
+                              ? iconBgColor.withValues(alpha: 0.2)
+                              : iconBgColor,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(icon, color: isDark ? iconBgColor : iconColor, size: 16),
+                        child: Icon(icon,
+                            color: isDark ? iconBgColor : iconColor,
+                            size: 16),
                       ),
                     ],
                   ),
@@ -488,118 +596,173 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildLeaderboard() {
-    final isDark = context.isDark;
-    final List<Map<String, dynamic>> topAthletes = [
-      {'name': 'Sahil R.', 'volume': '12,450', 'streak': 14, 'rank': 1},
-      {'name': 'Arjun V.', 'volume': '10,200', 'streak': 8, 'rank': 2},
-      {'name': 'Rahul S.', 'volume': '9,800', 'streak': 21, 'rank': 3},
-    ];
-
+  Widget _buildUpNextSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'TOP ATHLETES THIS WEEK',
-              style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
-            ),
-            const Icon(Icons.emoji_events_outlined, size: 16, color: AppColors.sun),
-          ],
+        Text(
+          'UP NEXT THIS WEEK',
+          style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
         ),
         const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-            border: Border.all(color: context.border.withOpacity(0.5)),
-          ),
-          child: Column(
-            children: topAthletes.map((athlete) {
-              final isFirst = athlete['rank'] == 1;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  border: athlete['rank'] != 3 
-                      ? Border(bottom: BorderSide(color: context.border.withOpacity(0.3)))
-                      : null,
+        if (_isLoading)
+          Container(
+            height: 72,
+            decoration: BoxDecoration(
+              color: context.muted,
+              borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+            ),
+          )
+        else if (_upcomingClasses.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+                vertical: 20, horizontal: 20),
+            decoration: BoxDecoration(
+              color: context.card,
+              borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+              border: Border.all(
+                  color: context.border.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.event_available_outlined,
+                    color: context.mutedFg, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  'No classes scheduled yet.',
+                  style: AppStyles.bodyFont
+                      .copyWith(color: context.mutedFg, fontSize: 14),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isFirst ? AppColors.sun.withOpacity(0.2) : context.muted,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '#${athlete['rank']}',
-                        style: AppStyles.bodyFont.copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isFirst ? AppColors.sun : context.mutedFg,
+              ],
+            ),
+          )
+        else
+          Column(
+            children: _upcomingClasses.map((cls) {
+              final startTime =
+                  DateTime.parse(cls['start_time']).toLocal();
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: context.card,
+                  borderRadius:
+                      BorderRadius.circular(AppStyles.radiusLg),
+                  border: Border.all(
+                      color: context.border.withValues(alpha: 0.5)),
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.gradientBrand,
+                          borderRadius: BorderRadius.horizontal(
+                            left: Radius.circular(AppStyles.radiusLg),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            athlete['name'],
-                            style: AppStyles.bodyFont.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 16),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              DateFormat('HH:mm').format(startTime),
+                              style: AppStyles.displayFont.copyWith(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold),
                             ),
-                          ),
-                          Text(
-                            '${athlete['streak']} day streak',
-                            style: AppStyles.bodyFont.copyWith(
-                              fontSize: 12,
-                              color: context.mutedFg,
+                            Text(
+                              DateFormat('EEE d').format(startTime).toUpperCase(),
+                              style: AppStyles.eyebrow.copyWith(
+                                  color: context.mutedFg, fontSize: 9),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${athlete['volume']} kg',
-                          style: AppStyles.numTabular.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.brand,
+                      Container(
+                        width: 1,
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        color: context.border.withValues(alpha: 0.6),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16),
+                          child: Text(
+                            cls['title'] ?? 'Class',
+                            style: AppStyles.bodyFont.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15),
                           ),
                         ),
-                        Text(
-                          'total volume',
-                          style: AppStyles.bodyFont.copyWith(
-                            fontSize: 10,
-                            color: context.mutedFg,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),
           ),
-        ),
       ],
     );
   }
 
-  Widget _buildUpNextSection() {
-    return Text(
-      'UP NEXT THIS WEEK',
-      style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
+  Widget _buildComingSoon(
+    String title,
+    String subtitle,
+    Color accentColor,
+    IconData icon,
+  ) {
+    final isDark = context.isDark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: AppStyles.eyebrow.copyWith(color: context.mutedFg)),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : context.card,
+            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+            border: Border.all(
+                color: context.border.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: accentColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Coming Soon',
+                    style: AppStyles.bodyFont.copyWith(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppStyles.bodyFont.copyWith(
+                        color: context.mutedFg, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -615,7 +778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: RichText(
           text: TextSpan(
             style: AppStyles.eyebrow.copyWith(
-              color: context.fg.withOpacity(0.5),
+              color: context.fg.withValues(alpha: 0.5),
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),
@@ -635,4 +798,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
-

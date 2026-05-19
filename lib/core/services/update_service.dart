@@ -19,7 +19,7 @@ class UpdateService {
 
       debugPrint('Supabase Response: $response');
 
-      if (response == null || (response as List).isEmpty) {
+      if ((response as List).isEmpty) {
         debugPrint('No config found in Supabase table "app_config"');
         return null;
       }

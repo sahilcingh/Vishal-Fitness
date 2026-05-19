@@ -11,6 +11,8 @@ import 'admin_subscriptions_screen.dart';
 import 'admin_classes_screen.dart';
 import 'admin_passes_screen.dart';
 import 'admin_announcements_screen.dart';
+import 'admin_expiry_screen.dart';
+import 'admin_reports_screen.dart';
 
 class AdminLayout extends StatefulWidget {
   const AdminLayout({super.key});
@@ -22,8 +24,14 @@ class AdminLayout extends StatefulWidget {
 class _AdminLayoutState extends State<AdminLayout> {
   int _currentIndex = 0;
 
+  void _switchToReports() => setState(() => _currentIndex = 5);
+
   @override
   Widget build(BuildContext context) {
+    return _buildScaffold(context);
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final isDark = context.isDark;
 
     return Scaffold(
@@ -41,6 +49,7 @@ class _AdminLayoutState extends State<AdminLayout> {
                     children: [
                       AdminDashboardScreen(
                         key: ValueKey('admin_tab_0_active_${_currentIndex == 0}'),
+                        onViewReports: _switchToReports,
                       ),
                       AdminSubscriptionsScreen(
                         key: ValueKey('admin_tab_1_active_${_currentIndex == 1}'),
@@ -53,6 +62,12 @@ class _AdminLayoutState extends State<AdminLayout> {
                       ),
                       AdminAnnouncementsScreen(
                         key: ValueKey('admin_tab_4_active_${_currentIndex == 4}'),
+                      ),
+                      AdminExpiryScreen(
+                        key: ValueKey('admin_tab_5_active_${_currentIndex == 5}'),
+                      ),
+                      AdminReportsScreen(
+                        key: ValueKey('admin_tab_6_active_${_currentIndex == 6}'),
                       ),
                     ],
                   ),
@@ -122,24 +137,25 @@ class _AdminLayoutState extends State<AdminLayout> {
     return Container(
       height: context.h(72),
       decoration: BoxDecoration(
-        color: context.card.withOpacity(0.95),
+        color: context.card.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(context.r(40)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.1),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.1),
             blurRadius: context.r(20),
             offset: Offset(0, context.h(10)),
           ),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildNavItem(0, Icons.bar_chart, 'Stats'),
-          _buildNavItem(1, Icons.people, 'Subs'),
-          _buildNavItem(2, Icons.event, 'Classes'),
-          _buildNavItem(3, Icons.local_activity, 'Passes'),
-          _buildNavItem(4, Icons.campaign, 'Alerts'),
+          Expanded(child: _buildNavItem(0, Icons.bar_chart, 'Stats')),
+          Expanded(child: _buildNavItem(1, Icons.people, 'Subs')),
+          Expanded(child: _buildNavItem(2, Icons.event, 'Classes')),
+          Expanded(child: _buildNavItem(3, Icons.local_activity, 'Passes')),
+          Expanded(child: _buildNavItem(4, Icons.campaign, 'Alerts')),
+          Expanded(child: _buildNavItem(5, Icons.hourglass_bottom, 'Expiry')),
+          Expanded(child: _buildNavItem(6, Icons.assessment_outlined, 'Reports')),
         ],
       ),
     );
@@ -155,15 +171,15 @@ class _AdminLayoutState extends State<AdminLayout> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        padding: EdgeInsets.symmetric(horizontal: context.w(12), vertical: context.h(8)),
+        margin: EdgeInsets.symmetric(horizontal: context.w(4), vertical: context.h(8)),
         decoration: BoxDecoration(
-          color: isActive ? color.withOpacity(0.1) : Colors.transparent,
+          color: isActive ? color.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(context.r(20)),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: context.r(24)),
+            Icon(icon, color: color, size: context.r(20)),
             if (isActive) ...[
               SizedBox(height: context.h(2)),
               Text(

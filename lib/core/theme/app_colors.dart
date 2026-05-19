@@ -66,6 +66,6 @@ extension AppThemeColors on BuildContext {
   Color get primaryColor => isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
   Color get primaryFg => isDark ? AppColors.darkBackground : AppColors.lightPrimaryForeground;
   Color get muted => isDark ? AppColors.darkMuted : AppColors.lightMuted;
-  Color get mutedFg => isDark ? AppColors.darkForeground.withOpacity(0.7) : AppColors.lightMutedForeground;
+  Color get mutedFg => isDark ? AppColors.darkForeground.withValues(alpha: 0.7) : AppColors.lightMutedForeground;
   Color get border => isDark ? AppColors.darkBorder : AppColors.lightBorder;
 }

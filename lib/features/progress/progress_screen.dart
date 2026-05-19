@@ -4,7 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../../main.dart'; // To access the global supabase client
+import '../../core/widgets/shimmer_box.dart';
+import '../../main.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -91,18 +92,67 @@ class _ProgressScreenState extends State<ProgressScreen> {
         .reduce((a, b) => a > b ? a : b);
   }
 
+  Widget _buildSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppStyles.containerPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          // Header
+          const ShimmerBox(width: 100, height: 12, radius: 6),
+          const SizedBox(height: 10),
+          const ShimmerBox(width: 180, height: 36, radius: 8),
+          const SizedBox(height: 24),
+          // Chart card
+          const ShimmerBox(height: 220, radius: 20),
+          const SizedBox(height: 24),
+          // Tiles row
+          Row(
+            children: const [
+              Expanded(child: ShimmerBox(height: 100, radius: 20)),
+              SizedBox(width: 12),
+              Expanded(child: ShimmerBox(height: 100, radius: 20)),
+              SizedBox(width: 12),
+              Expanded(child: ShimmerBox(height: 100, radius: 20)),
+            ],
+          ),
+          const SizedBox(height: 32),
+          // PRs label + card
+          const ShimmerBox(width: 160, height: 12, radius: 6),
+          const SizedBox(height: 16),
+          const ShimmerBox(height: 64, radius: 20),
+          const SizedBox(height: 32),
+          // Sessions label
+          const ShimmerBox(width: 140, height: 12, radius: 6),
+          const SizedBox(height: 16),
+          // Session rows
+          for (int i = 0; i < 5; i++) ...[
+            const ShimmerBox(height: 52, radius: 12),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 120),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.brand),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppStyles.containerPadding,
-              ),
+          ? _buildSkeleton()
+          : RefreshIndicator(
+              color: AppColors.brand,
+              onRefresh: _fetchLogs,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppStyles.containerPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -119,10 +169,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
                           begin: const Offset(0.9, 0.9),
                         )
                         .fadeIn(duration: 400.ms),
+                    const SizedBox(height: 24),
+                    _buildTiles(),
                     const SizedBox(height: 32),
-                    _buildPersonalRecords(), // NEW: PRs Section
-                    const SizedBox(height: 32),
-                    _buildRecentSessions(),
+                    _buildPersonalRecords(),
                     const SizedBox(height: 32),
                     _buildRecentSessions(),
                     const SizedBox(height: 48),
@@ -131,6 +181,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   ],
                 ),
               ),
+            ),
     );
   }
 
@@ -339,12 +390,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   Widget _buildPersonalRecords() {
     final isDark = context.isDark;
-    final List<Map<String, dynamic>> records = [
-      {'exercise': 'Squat', 'weight': '120', 'icon': Icons.fitness_center, 'color': AppColors.brand},
-      {'exercise': 'Bench Press', 'weight': '95', 'icon': Icons.horizontal_rule, 'color': AppColors.pulse},
-      {'exercise': 'Deadlift', 'weight': '155', 'icon': Icons.vertical_align_top, 'color': AppColors.energy},
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -353,42 +398,40 @@ class _ProgressScreenState extends State<ProgressScreen> {
           style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
         ),
         const SizedBox(height: 16),
-        Row(
-          children: records.map((pr) {
-            return Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 20),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : context.card,
+            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+            border: Border.all(color: context.border.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                  borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-                  border: Border.all(color: context.border.withOpacity(0.5)),
+                  color: AppColors.energy.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
-                child: Column(
-                  children: [
-                    Icon(pr['icon'], color: pr['color'], size: 24),
-                    const SizedBox(height: 12),
-                    Text(
-                      '${pr['weight']} kg',
-                      style: AppStyles.displayFont.copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      pr['exercise'],
-                      style: AppStyles.bodyFont.copyWith(
-                        fontSize: 10,
-                        color: context.mutedFg,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+                child: const Icon(Icons.emoji_events_outlined, color: AppColors.energy, size: 18),
               ),
-            );
-          }).toList(),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Coming Soon',
+                    style: AppStyles.bodyFont.copyWith(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  Text(
+                    'Track your 1RM and PRs here',
+                    style: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -440,9 +483,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.card,
         borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-        border: Border.all(color: context.border.withOpacity(0.5)),
+        border: Border.all(color: context.border.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -522,7 +565,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               border: Border.all(color: context.border.withOpacity(0.5)),
             ),
             child: Text(
-              'No sessions yet. Log a workout from the Train tab.',
+              'No sessions logged in the last 30 days.',
               textAlign: TextAlign.center,
               style: AppStyles.bodyFont.copyWith(
                 color: context.mutedFg,

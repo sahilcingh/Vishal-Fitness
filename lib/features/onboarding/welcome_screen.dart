@@ -23,8 +23,8 @@ class WelcomeScreen extends StatelessWidget {
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
               context.isDark
-                  ? Colors.black.withOpacity(0.6)
-                  : Colors.white.withOpacity(0.4),
+                  ? Colors.black.withValues(alpha: 0.6)
+                  : Colors.white.withValues(alpha: 0.4),
               context.isDark ? BlendMode.darken : BlendMode.lighten,
             ),
           ),
@@ -77,7 +77,7 @@ class WelcomeScreen extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: AppColors.brand.withOpacity(0.15),
+                        color: AppColors.brand.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -120,7 +120,7 @@ class WelcomeScreen extends StatelessWidget {
             backgroundColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: context.fg.withOpacity(0.8)),
+              side: BorderSide(color: context.fg.withValues(alpha: 0.8)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           ),
@@ -291,7 +291,7 @@ class WelcomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppStyles.radiusLg),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFD1D1D).withOpacity(0.3),
+              color: const Color(0xFFFD1D1D).withValues(alpha: 0.3),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -302,7 +302,7 @@ class WelcomeScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               // Using a standard camera icon as the logo
@@ -330,7 +330,7 @@ class WelcomeScreen extends StatelessWidget {
                     'Watch our latest reels & workout tips! 🚀',
                     style: AppStyles.bodyFont.copyWith(
                       fontSize: 12,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
                 ],
@@ -343,7 +343,7 @@ class WelcomeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -378,12 +378,12 @@ class WelcomeScreen extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 4),
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: context.card.withOpacity(0.9), // Added slight opacity
+            color: context.card.withValues(alpha: 0.9), // Added slight opacity
             borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-            border: Border.all(color: context.border.withOpacity(0.8)),
+            border: Border.all(color: context.border.withValues(alpha: 0.8)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -394,7 +394,7 @@ class WelcomeScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.15),
+                  color: iconColor.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: iconColor, size: 22),
@@ -437,12 +437,12 @@ class WelcomeScreen extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: context.card.withOpacity(0.9), // Added slight opacity
+          color: context.card.withValues(alpha: 0.9), // Added slight opacity
           borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-          border: Border.all(color: context.border.withOpacity(0.8)),
+          border: Border.all(color: context.border.withValues(alpha: 0.8)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -527,9 +527,7 @@ class WelcomeScreen extends StatelessWidget {
         child: RichText(
           text: TextSpan(
             style: AppStyles.eyebrow.copyWith(
-              color: context.fg.withOpacity(
-                0.8,
-              ), // Darkened from lightMutedForeground
+              color: context.fg.withValues(alpha: 0.8), // Darkened from lightMutedForeground
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700, // Added weight
             ),
@@ -584,7 +582,7 @@ class WelcomeScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.brand.withOpacity(0.15),
+                      color: AppColors.brand.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -755,7 +753,7 @@ class WelcomeScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.energy.withOpacity(0.15),
+                      color: AppColors.energy.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.female, color: AppColors.energy, size: 28),
@@ -880,7 +878,7 @@ class WelcomeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.card,
         borderRadius: BorderRadius.circular(AppStyles.radiusSm),
-        border: Border.all(color: context.border.withOpacity(0.5)),
+        border: Border.all(color: context.border.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [

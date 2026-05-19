@@ -1,12 +1,14 @@
 import 'dart:convert';
-import 'dart:ui'; // Required for the ImageFilter.blur that mimics CSS blobs
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/widgets/shimmer_box.dart';
 import '../../main.dart';
 
 class PassScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class PassScreen extends StatefulWidget {
 
 class _PassScreenState extends State<PassScreen> {
   Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _subscription;
   List<Map<String, dynamic>> _checks = [];
   bool _isLoading = true;
   bool _isCheckingIn = false;
@@ -45,12 +48,20 @@ class _PassScreenState extends State<PassScreen> {
             .eq('user_id', user.id)
             .order('checked_in_at', ascending: false)
             .limit(8),
+        supabase
+            .from('subscriptions')
+            .select('status, end_date, gym_passes(name)')
+            .eq('user_id', user.id)
+            .order('end_date', ascending: false)
+            .limit(1)
+            .maybeSingle(),
       ]);
 
       if (mounted) {
         setState(() {
           _profile = results[0] as Map<String, dynamic>?;
           _checks = List<Map<String, dynamic>>.from(results[1] as List);
+          _subscription = results[2] as Map<String, dynamic>?;
           _isLoading = false;
         });
       }
@@ -65,6 +76,7 @@ class _PassScreenState extends State<PassScreen> {
     if (user == null) return;
 
     setState(() => _isCheckingIn = true);
+    HapticFeedback.mediumImpact();
 
     try {
       await supabase.from('check_ins').insert({'user_id': user.id});
@@ -92,6 +104,46 @@ class _PassScreenState extends State<PassScreen> {
     }
   }
 
+  Widget _buildSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppStyles.containerPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          // Header
+          const ShimmerBox(width: 100, height: 12, radius: 6),
+          const SizedBox(height: 10),
+          const ShimmerBox(width: 160, height: 28, radius: 8),
+          const SizedBox(height: 24),
+          // Pass card (dark)
+          const ShimmerBoxDark(height: 420, radius: 24),
+          const SizedBox(height: 24),
+          // Check-in button
+          const ShimmerBox(height: 52, radius: 16),
+          const SizedBox(height: 32),
+          // Recent visits label
+          const ShimmerBox(width: 120, height: 12, radius: 6),
+          const SizedBox(height: 16),
+          // Visit rows
+          for (int i = 0; i < 5; i++) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                ShimmerBox(width: 160, height: 16, radius: 6),
+                ShimmerBox(width: 48, height: 16, radius: 6),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+          const SizedBox(height: 120),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = supabase.auth.currentUser;
@@ -108,16 +160,17 @@ class _PassScreenState extends State<PassScreen> {
     });
 
     return Scaffold(
-      // Ensure this matches your MainLayout's background color (usually FAFAFA or similar light grey)
       backgroundColor: Colors.transparent,
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.brand),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppStyles.containerPadding,
-              ),
+          ? _buildSkeleton()
+          : RefreshIndicator(
+              color: AppColors.brand,
+              onRefresh: _fetchData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppStyles.containerPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -144,6 +197,7 @@ class _PassScreenState extends State<PassScreen> {
                   ],
                 ),
               ),
+            ),
     );
   }
 
@@ -235,15 +289,24 @@ class _PassScreenState extends State<PassScreen> {
   }
 
   Widget _buildDigitalPassCard(String memberId, String qrPayload) {
-    final joinedAt = _profile?['created_at'];
-    final formattedDate = joinedAt != null
-        ? DateFormat("MMM ''yy").format(DateTime.parse(joinedAt))
+    final endDate = _subscription?['end_date'] as String?;
+    final formattedExpiry = endDate != null
+        ? DateFormat("d MMM yy").format(DateTime.parse(endDate))
         : "—";
 
     String displayName = _profile?['full_name'] ?? "—";
     if (displayName.contains(' ')) {
       displayName = displayName.split(' ')[0];
     }
+
+    final passName =
+        (_subscription?['gym_passes'] as Map<String, dynamic>?)?['name']
+            as String? ??
+        'Standard';
+    final statusRaw =
+        (_subscription?['status'] as String?)?.toUpperCase() ?? 'INACTIVE';
+    final isActive = statusRaw == 'ACTIVE';
+    final statusColor = isActive ? AppColors.brand : AppColors.energy;
 
     return Container(
       width: double.infinity,
@@ -365,7 +428,7 @@ class _PassScreenState extends State<PassScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.brand.withOpacity(0.2),
+                          color: statusColor.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -373,16 +436,16 @@ class _PassScreenState extends State<PassScreen> {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppColors.brand,
+                                color: statusColor,
                               ),
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'ACTIVE',
+                              statusRaw,
                               style: AppStyles.eyebrow.copyWith(
-                                color: AppColors.brand,
+                                color: statusColor,
                                 fontSize: 10,
                               ),
                             ),
@@ -420,11 +483,11 @@ class _PassScreenState extends State<PassScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: _buildDetailColumn('PLAN', 'Standard')),
+                          Expanded(child: _buildDetailColumn('PLAN', passName)),
                           const SizedBox(width: 8),
                           Expanded(child: _buildDetailColumn('ID', memberId)),
                           const SizedBox(width: 8),
-                          Expanded(child: _buildDetailColumn('SINCE', formattedDate)),
+                          Expanded(child: _buildDetailColumn('EXPIRES', formattedExpiry)),
                         ],
                       ),
                     ],

@@ -7,9 +7,11 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../main.dart';
 import 'package:intl/intl.dart';
+import 'admin_add_member_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
-  const AdminDashboardScreen({super.key});
+  final VoidCallback onViewReports;
+  const AdminDashboardScreen({super.key, required this.onViewReports});
 
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
@@ -18,6 +20,10 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _stats;
+  int _expiredCount = 0;
+  int _criticalCount = 0;
+  int _expiringCount = 0;
+  List<Map<String, dynamic>> _recentActivity = [];
 
   @override
   void initState() {
@@ -28,39 +34,104 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _fetchStats() async {
     setState(() => _isLoading = true);
     try {
-      final response = await supabase
+      final analyticsData = await supabase
           .from('admin_analytics')
           .select()
           .maybeSingle();
-      
-      if (mounted && response != null) {
+      final subsList = await supabase
+          .from('subscriptions')
+          .select('end_date')
+          .neq('status', 'cancelled');
+
+      final today = DateTime.now();
+      int expired = 0, critical = 0, expiring = 0;
+      for (final sub in subsList) {
+        final endDateStr = sub['end_date'] as String?;
+        if (endDateStr == null) continue;
+        final endDate = DateTime.tryParse(endDateStr);
+        if (endDate == null) continue;
+        final days = endDate.difference(today).inDays;
+        if (days < 0) {
+          expired++;
+        } else if (days <= 7) {
+          critical++;
+        } else if (days <= 30) {
+          expiring++;
+        }
+      }
+
+      final recentCheckIns = await supabase
+          .from('check_ins')
+          .select('checked_in_at, profiles(full_name)')
+          .order('checked_in_at', ascending: false)
+          .limit(8);
+
+      final recentSubs = await supabase
+          .from('subscriptions')
+          .select('created_at, profiles(full_name), gym_passes(name)')
+          .order('created_at', ascending: false)
+          .limit(8);
+
+      final List<Map<String, dynamic>> activity = [];
+      for (final ci in recentCheckIns) {
+        final profile = ci['profiles'] as Map<String, dynamic>?;
+        final name = profile?['full_name'] as String? ?? 'A member';
+        final createdAt = DateTime.tryParse(ci['checked_in_at'] as String? ?? '');
+        if (createdAt == null) continue;
+        activity.add({
+          'title': '$name checked in',
+          'subtitle': 'Gym visit recorded',
+          'time': createdAt,
+          'icon': Icons.fitness_center,
+          'color': AppColors.brand,
+        });
+      }
+      for (final sub in recentSubs) {
+        final profile = sub['profiles'] as Map<String, dynamic>?;
+        final pass = sub['gym_passes'] as Map<String, dynamic>?;
+        final name = profile?['full_name'] as String? ?? 'A member';
+        final passName = pass?['name'] as String? ?? 'Pass';
+        final createdAt = DateTime.tryParse(sub['created_at'] as String? ?? '');
+        if (createdAt == null) continue;
+        activity.add({
+          'title': 'New subscription',
+          'subtitle': '$name — $passName',
+          'time': createdAt,
+          'icon': Icons.card_membership,
+          'color': AppColors.aqua,
+        });
+      }
+      activity.sort((a, b) {
+        final ta = a['time'] as DateTime;
+        final tb = b['time'] as DateTime;
+        return tb.compareTo(ta);
+      });
+      if (activity.length > 8) activity.length = 8;
+
+      if (mounted) {
         setState(() {
-          _stats = response;
+          _stats = analyticsData ?? {
+            'total_active_members': 0,
+            'revenue_this_month': 0,
+            'upcoming_classes': 0,
+            'new_members_today': 0,
+          };
+          _expiredCount = expired;
+          _criticalCount = critical;
+          _expiringCount = expiring;
+          _recentActivity = activity;
           _isLoading = false;
         });
-      } else {
-        // Fallback to some default stats if null or error (for UI preview)
-        if (mounted) {
-          setState(() {
-            _stats = {
-              'total_active_members': 142,
-              'revenue_this_month': 45500,
-              'upcoming_classes': 8,
-              'new_members_today': 3,
-            };
-            _isLoading = false;
-          });
-        }
       }
     } catch (e) {
       debugPrint('Error fetching admin stats: $e');
       if (mounted) {
         setState(() {
           _stats = {
-            'total_active_members': 142,
-            'revenue_this_month': 45500,
-            'upcoming_classes': 8,
-            'new_members_today': 3,
+            'total_active_members': 0,
+            'revenue_this_month': 0,
+            'upcoming_classes': 0,
+            'new_members_today': 0,
           };
           _isLoading = false;
         });
@@ -215,6 +286,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ],
           ),
+          if (_expiredCount > 0 || _criticalCount > 0 || _expiringCount > 0) ...[
+            SizedBox(height: context.h(24)),
+            Text(
+              'EXPIRY ALERTS',
+              style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
+            ),
+            SizedBox(height: context.h(12)),
+            _buildExpiryAlertCard(context),
+          ],
           SizedBox(height: context.h(32)),
 
           Row(
@@ -238,6 +318,103 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _buildRecentActivityList(context),
 
           SizedBox(height: context.h(120)), // Bottom padding for nav bar
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiryAlertCard(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onViewReports,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(context.r(20)),
+        decoration: BoxDecoration(
+          color: context.card,
+          borderRadius: BorderRadius.circular(context.r(AppStyles.radiusLg)),
+          border: Border.all(
+            color: _expiredCount > 0 || _criticalCount > 0
+                ? Colors.redAccent.withValues(alpha: 0.45)
+                : AppColors.sun.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(context.r(6)),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: context.r(16)),
+                ),
+                SizedBox(width: context.w(8)),
+                Text(
+                  'PASS EXPIRY ALERT',
+                  style: AppStyles.eyebrow.copyWith(color: Colors.redAccent),
+                ),
+                const Spacer(),
+                Text(
+                  'View Report →',
+                  style: AppStyles.bodyFont.copyWith(
+                    color: AppColors.brand,
+                    fontSize: context.sp(12),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: context.h(16)),
+            Row(
+              children: [
+                if (_expiredCount > 0) ...[
+                  _buildAlertChip(context, _expiredCount, 'Expired', Colors.redAccent),
+                  SizedBox(width: context.w(8)),
+                ],
+                if (_criticalCount > 0) ...[
+                  _buildAlertChip(context, _criticalCount, '≤ 7 Days', AppColors.energy),
+                  SizedBox(width: context.w(8)),
+                ],
+                if (_expiringCount > 0)
+                  _buildAlertChip(context, _expiringCount, '≤ 30 Days', AppColors.sun),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlertChip(BuildContext context, int count, String label, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: context.w(16), vertical: context.h(10)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(context.r(10)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            count.toString(),
+            style: AppStyles.displayFont.copyWith(
+              fontSize: context.sp(22),
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          SizedBox(height: context.h(2)),
+          Text(
+            label,
+            style: AppStyles.eyebrow.copyWith(
+              fontSize: context.sp(9),
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -430,7 +607,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.person_add,
             label: 'Add Member',
             color: AppColors.aqua,
-            onTap: () {},
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AdminAddMemberScreen(),
+              ),
+            ),
           ),
           SizedBox(width: context.w(12)),
           _buildActionPill(
@@ -501,13 +683,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('d MMM').format(dt);
+  }
+
   Widget _buildRecentActivityList(BuildContext context) {
-    // Mock data for visual improvement.
-    final activities = [
-      {'title': 'New member signed up', 'subtitle': 'John Doe purchased Pro Pass', 'time': '2m ago', 'icon': Icons.person_add, 'color': AppColors.aqua},
-      {'title': 'Class fully booked', 'subtitle': 'HIIT Bootcamp at 6 PM', 'time': '1h ago', 'icon': Icons.local_fire_department, 'color': AppColors.energy},
-      {'title': 'Payment received', 'subtitle': '₹2,500 from Sarah Smith', 'time': '3h ago', 'icon': Icons.check_circle, 'color': AppColors.brand},
-    ];
+    if (_recentActivity.isEmpty) {
+      return Container(
+        padding: EdgeInsets.all(context.r(24)),
+        decoration: BoxDecoration(
+          color: context.card,
+          borderRadius: BorderRadius.circular(context.r(AppStyles.radiusLg)),
+          border: Border.all(color: context.border.withValues(alpha: 0.5)),
+        ),
+        child: Center(
+          child: Text(
+            'No recent activity',
+            style: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
+          ),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -518,20 +719,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: activities.length,
+        itemCount: _recentActivity.length,
         padding: EdgeInsets.zero,
-        separatorBuilder: (context, index) => Divider(height: 1, color: context.border.withValues(alpha: 0.3)),
-        itemBuilder: (context, index) {
-          final item = activities[index];
+        separatorBuilder: (_, _) => Divider(height: 1, color: context.border.withValues(alpha: 0.3)),
+        itemBuilder: (_, index) {
+          final item = _recentActivity[index];
+          final color = item['color'] as Color;
+          final time = item['time'] as DateTime;
           return ListTile(
             contentPadding: EdgeInsets.symmetric(horizontal: context.w(16), vertical: context.h(8)),
             leading: Container(
               padding: EdgeInsets.all(context.r(10)),
               decoration: BoxDecoration(
-                color: (item['color'] as Color).withValues(alpha: 0.15),
+                color: color.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: context.r(18)),
+              child: Icon(item['icon'] as IconData, color: color, size: context.r(18)),
             ),
             title: Text(
               item['title'] as String,
@@ -542,7 +745,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               style: AppStyles.bodyFont.copyWith(fontSize: context.sp(12), color: context.mutedFg),
             ),
             trailing: Text(
-              item['time'] as String,
+              _timeAgo(time),
               style: AppStyles.eyebrow.copyWith(fontSize: context.sp(9), color: context.mutedFg),
             ),
           );

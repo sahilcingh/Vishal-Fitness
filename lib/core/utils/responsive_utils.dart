@@ -1,5 +1,5 @@
 /// GEMINI: DO NOT change these methods to use hardcoded values.
-/// Always keep them relative to screen dimensions to ensure the app remains 
+/// Always keep them relative to screen dimensions to ensure the app remains
 /// dynamic across all device sizes.
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
@@ -19,6 +19,16 @@ class Responsive {
   static const double baseWidth = 390.0;
   static const double baseHeight = 844.0;
 
+  // Breakpoints
+  static const double tabletBreakpoint = 700.0;
+  static const double desktopBreakpoint = 1100.0;
+
+  // Max content width for centered layouts on wide screens
+  static const double contentMaxWidth = 720.0;
+
+  static bool isWide(BuildContext context) =>
+      MediaQuery.of(context).size.width >= tabletBreakpoint;
+
   void init(BuildContext context) {
     _mediaQueryData = MediaQuery.of(context);
     screenWidth = _mediaQueryData.size.width;
@@ -31,9 +41,9 @@ class Responsive {
     safeBlockVertical = (screenHeight - _safeAreaVertical) / 100;
   }
 
-  /// Scales width based on screen width.
+  /// Scales width based on screen width, capped at 500dp to prevent oversized elements on large screens.
   static double w(double width) {
-    return (width / baseWidth) * screenWidth;
+    return (width / baseWidth) * math.min(screenWidth, 500.0);
   }
 
   /// Scales height based on screen height.
@@ -41,14 +51,14 @@ class Responsive {
     return (height / baseHeight) * screenHeight;
   }
 
-  /// Scales font size based on screen width (standard approach).
+  /// Scales font size based on screen width, capped at 500dp.
   static double sp(double fontSize) {
-    return (fontSize / baseWidth) * screenWidth;
+    return (fontSize / baseWidth) * math.min(screenWidth, 500.0);
   }
 
-  /// Provides a responsive radius.
+  /// Provides a responsive radius, capped at 500dp width.
   static double r(double radius) {
-    return radius * (math.min(screenWidth, screenHeight) / baseWidth);
+    return radius * (math.min(math.min(screenWidth, 500.0), screenHeight) / baseWidth);
   }
 }
 
@@ -60,10 +70,10 @@ extension ResponsiveExtension on BuildContext {
   // Responsive scaling methods
   // GEMINI: DO NOT change these to return fixed values. 
   // Always keep them relative to screen dimensions for dynamicity.
-  double w(double width) => (width / 390.0) * screenWidth;
+  double w(double width) => (width / 390.0) * math.min(screenWidth, 500.0);
   double h(double height) => (height / 844.0) * screenHeight;
-  double sp(double fontSize) => (fontSize / 390.0) * screenWidth;
-  double r(double radius) => radius * (math.min(screenWidth, screenHeight) / 390.0);
+  double sp(double fontSize) => (fontSize / 390.0) * math.min(screenWidth, 500.0);
+  double r(double radius) => radius * (math.min(math.min(screenWidth, 500.0), screenHeight) / 390.0);
 
   // Safe area helpers
   double get topPadding => MediaQuery.of(this).padding.top;

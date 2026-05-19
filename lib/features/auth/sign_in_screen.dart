@@ -421,6 +421,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -429,79 +431,143 @@ class _SignInScreenState extends State<SignInScreen> {
             child: _buildBackgroundImage(context, key: ValueKey(isAdminMode)),
           ),
           SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: CustomScrollView(
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: context.w(AppStyles.containerPadding),
-                      ),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          SizedBox(height: context.h(16)),
-                          _buildLogoAndEyebrow(context),
-                          SizedBox(height: context.h(16)),
-                          _buildMainHeading(context),
-                          SizedBox(height: context.h(8)),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: Text(
-                              isAdminMode
-                                  ? 'Enter secure credentials to access the gym command center and manage operations.'
-                                  : 'Your streak is waiting. Let\'s pick up where you\nleft off.',
-                              key: ValueKey(isAdminMode),
-                              style: AppStyles.bodyFont.copyWith(
-                                color: context.mutedFg,
-                                height: 1.5,
-                                fontSize: context.sp(14),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: context.h(24)),
+            child: screenWidth > 800
+                ? _buildWideLayout(context)
+                : _buildNarrowLayout(context),
+          ),
+        ],
+      ),
+    );
+  }
 
-                          // Wrap in AnimatedSize so the card smoothly expands when fields are added
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOutCubic,
-                            child: _buildAuthCard(context),
-                          ),
+  // Wide (web/tablet) layout: left = branding, right = form card
+  Widget _buildWideLayout(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.w(48),
+              vertical: context.h(32),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLogoAndEyebrow(context),
+                SizedBox(height: context.h(32)),
+                _buildMainHeading(context),
+                SizedBox(height: context.h(16)),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    isAdminMode
+                        ? 'Enter secure credentials to access the gym command center and manage operations.'
+                        : 'Your streak is waiting. Let\'s pick up where you left off.',
+                    key: ValueKey(isAdminMode),
+                    style: AppStyles.bodyFont.copyWith(
+                      color: context.mutedFg,
+                      height: 1.5,
+                      fontSize: context.sp(15),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _buildFeaturePills(context, key: ValueKey(isAdminMode)),
+                ),
+                SizedBox(height: context.h(16)),
+                _buildAdminToggle(context),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 440,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(context.w(32)),
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOutCubic,
+                child: _buildAuthCard(context),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-                          SizedBox(height: context.h(24)),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: _buildFeaturePills(
-                              context,
-                              key: ValueKey(isAdminMode),
-                            ),
-                          ),
-                        ]),
+  // Narrow (mobile) layout: original stacked layout
+  Widget _buildNarrowLayout(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.w(AppStyles.containerPadding),
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  SizedBox(height: context.h(16)),
+                  _buildLogoAndEyebrow(context),
+                  SizedBox(height: context.h(16)),
+                  _buildMainHeading(context),
+                  SizedBox(height: context.h(8)),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Text(
+                      isAdminMode
+                          ? 'Enter secure credentials to access the gym command center and manage operations.'
+                          : 'Your streak is waiting. Let\'s pick up where you\nleft off.',
+                      key: ValueKey(isAdminMode),
+                      style: AppStyles.bodyFont.copyWith(
+                        color: context.mutedFg,
+                        height: 1.5,
+                        fontSize: context.sp(14),
                       ),
                     ),
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      fillOverscroll: true,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: context.w(AppStyles.containerPadding),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            SizedBox(height: context.h(20)),
-                            _buildAdminToggle(context),
-                            SizedBox(height: context.h(16)),
-                          ],
-                        ),
-                      ),
+                  ),
+                  SizedBox(height: context.h(24)),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOutCubic,
+                    child: _buildAuthCard(context),
+                  ),
+                  SizedBox(height: context.h(24)),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _buildFeaturePills(
+                      context,
+                      key: ValueKey(isAdminMode),
                     ),
+                  ),
+                ]),
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              fillOverscroll: true,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.w(AppStyles.containerPadding),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    SizedBox(height: context.h(20)),
+                    _buildAdminToggle(context),
+                    SizedBox(height: context.h(16)),
                   ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -521,10 +587,10 @@ class _SignInScreenState extends State<SignInScreen> {
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             isAdminMode
-                ? Colors.black.withOpacity(0.8)
+                ? Colors.black.withValues(alpha: 0.8)
                 : (context.isDark
-                      ? Colors.black.withOpacity(0.6)
-                      : Colors.white.withOpacity(0.4)),
+                      ? Colors.black.withValues(alpha: 0.6)
+                      : Colors.white.withValues(alpha: 0.4)),
             isAdminMode
                 ? BlendMode.darken
                 : (context.isDark ? BlendMode.darken : BlendMode.lighten),
@@ -573,7 +639,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           width: context.w(44),
                           height: context.w(44),
                           decoration: BoxDecoration(
-                            color: AppColors.brand.withOpacity(0.15),
+                            color: AppColors.brand.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(context.r(10)),
                           ),
                           child: Icon(
@@ -673,13 +739,13 @@ class _SignInScreenState extends State<SignInScreen> {
         borderRadius: BorderRadius.circular(context.r(AppStyles.radiusLg)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
         ],
         border: isAdminMode
-            ? Border.all(color: AppColors.aqua.withOpacity(0.3), width: 1)
+            ? Border.all(color: AppColors.aqua.withValues(alpha: 0.3), width: 1)
             : null,
       ),
       child: ClipRRect(
@@ -1033,7 +1099,7 @@ class _SignInScreenState extends State<SignInScreen> {
             Container(
               padding: EdgeInsets.all(context.w(8)),
               decoration: BoxDecoration(
-                color: AppColors.energy.withOpacity(0.15),
+                color: AppColors.energy.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -1160,7 +1226,7 @@ class _SignInScreenState extends State<SignInScreen> {
             Container(
               padding: EdgeInsets.all(context.w(8)),
               decoration: BoxDecoration(
-                color: AppColors.pulse.withOpacity(0.15),
+                color: AppColors.pulse.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -1310,7 +1376,7 @@ class _SignInScreenState extends State<SignInScreen> {
             borderRadius: BorderRadius.circular(context.r(AppStyles.radiusSm)),
             borderSide: BorderSide(
               color: isAdminMode
-                  ? AppColors.aqua.withOpacity(0.3)
+                  ? AppColors.aqua.withValues(alpha: 0.3)
                   : context.border,
             ),
           ),
@@ -1321,7 +1387,7 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           ),
           filled: isAdminMode,
-          fillColor: isAdminMode ? Colors.white.withOpacity(0.05) : null,
+          fillColor: isAdminMode ? Colors.white.withValues(alpha: 0.05) : null,
         ),
       ),
     );
@@ -1361,12 +1427,12 @@ class _SignInScreenState extends State<SignInScreen> {
         margin: EdgeInsets.symmetric(horizontal: context.w(4)),
         padding: EdgeInsets.symmetric(vertical: context.h(14)),
         decoration: BoxDecoration(
-          color: isAdminMode ? Colors.black.withOpacity(0.4) : context.card,
+          color: isAdminMode ? Colors.black.withValues(alpha: 0.4) : context.card,
           borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
           border: Border.all(
             color: isAdminMode
-                ? iconColor.withOpacity(0.3)
-                : context.border.withOpacity(0.5),
+                ? iconColor.withValues(alpha: 0.3)
+                : context.border.withValues(alpha: 0.5),
           ),
         ),
         child: Column(
@@ -1374,7 +1440,7 @@ class _SignInScreenState extends State<SignInScreen> {
             Container(
               padding: EdgeInsets.all(context.w(10)),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.15),
+                color: iconColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: iconColor, size: context.w(20)),
@@ -1416,7 +1482,7 @@ class _SignInScreenState extends State<SignInScreen> {
           children: [
             Icon(
               isAdminMode ? Icons.person : Icons.admin_panel_settings,
-              color: context.mutedFg.withOpacity(0.5),
+              color: context.mutedFg.withValues(alpha: 0.5),
               size: context.w(14),
             ),
             SizedBox(width: context.w(6)),
@@ -1424,7 +1490,7 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Text(
                 isAdminMode ? 'RETURN TO MEMBER LOGIN' : 'STAFF / ADMIN ACCESS',
                 style: AppStyles.eyebrow.copyWith(
-                  color: context.mutedFg.withOpacity(0.5),
+                  color: context.mutedFg.withValues(alpha: 0.5),
                   letterSpacing: 2.5,
                   fontSize: context.sp(10),
                 ),

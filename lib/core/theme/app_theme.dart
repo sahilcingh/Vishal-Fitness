@@ -109,7 +109,7 @@ class AppTheme {
         ),
         bodyMedium: AppStyles.bodyFont.copyWith(
           fontSize: 14,
-          color: AppColors.darkForeground.withOpacity(0.7),
+          color: AppColors.darkForeground.withValues(alpha: 0.7),
         ),
       ),
 

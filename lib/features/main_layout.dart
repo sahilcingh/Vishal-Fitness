@@ -1,10 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_styles.dart';
+import '../core/services/notification_service.dart';
 import '../core/services/update_service.dart';
+import '../core/utils/responsive_utils.dart';
 import '../core/widgets/update_dialog.dart';
 import '../main.dart';
 import 'dashboard/dashboard_screen.dart';
@@ -23,11 +24,19 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
+  int _profileVersion = 0;
 
   @override
   void initState() {
     super.initState();
     _checkForUpdates();
+    _registerNotifications();
+  }
+
+  Future<void> _registerNotifications() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    await NotificationService.initialize(userId);
   }
 
   Future<void> _checkForUpdates() async {
@@ -44,8 +53,28 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
+    return _buildScaffold(context);
+  }
 
+  Widget _buildScaffold(BuildContext context) {
+    final isDark = context.isDark;
+    final isWide = Responsive.isWide(context);
+    return isWide
+        ? _buildWideLayout(context, isDark)
+        : _buildNarrowLayout(context, isDark);
+  }
+
+  List<Widget> _buildScreens() {
+    return [
+      DashboardScreen(key: ValueKey('dashboard_v$_profileVersion')),
+      TrainScreen(key: ValueKey('tab_1_active_${_currentIndex == 1}')),
+      ProgressScreen(key: ValueKey('tab_2_active_${_currentIndex == 2}')),
+      PassScreen(key: ValueKey('tab_3_active_${_currentIndex == 3}')),
+    ];
+  }
+
+  // Narrow layout (mobile): floating bottom nav bar
+  Widget _buildNarrowLayout(BuildContext context, bool isDark) {
     return Scaffold(
       backgroundColor: context.bg,
       body: SafeArea(
@@ -58,31 +87,156 @@ class _MainLayoutState extends State<MainLayout> {
                 Expanded(
                   child: IndexedStack(
                     index: _currentIndex,
-                    children: [
-                      DashboardScreen(
-                        key: ValueKey('tab_0_active_${_currentIndex == 0}'),
-                      ),
-                      TrainScreen(
-                        key: ValueKey('tab_1_active_${_currentIndex == 1}'),
-                      ),
-                      ProgressScreen(
-                        key: ValueKey('tab_2_active_${_currentIndex == 2}'),
-                      ),
-                      PassScreen(
-                        key: ValueKey('tab_3_active_${_currentIndex == 3}'),
-                      ),
-                    ],
+                    children: _buildScreens(),
                   ),
                 ),
               ],
             ),
-
-            // The Persistent Floating Nav Bar
             Positioned(
               bottom: 24,
               left: AppStyles.containerPadding,
               right: AppStyles.containerPadding,
               child: _buildFloatingNavBar(isDark),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Wide layout (tablet/desktop): sidebar rail + centered content
+  Widget _buildWideLayout(BuildContext context, bool isDark) {
+    return Scaffold(
+      backgroundColor: context.bg,
+      body: SafeArea(
+        child: Row(
+          children: [
+            _buildSideRail(isDark),
+            Container(width: 1, color: context.border.withValues(alpha: 0.4)),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildTopBranding(),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: Responsive.contentMaxWidth,
+                        ),
+                        child: IndexedStack(
+                          index: _currentIndex,
+                          children: _buildScreens(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideRail(bool isDark) {
+    final railBg = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final inactiveColor = isDark ? Colors.black38 : Colors.white38;
+
+    return Container(
+      width: 76,
+      decoration: BoxDecoration(
+        color: railBg,
+        borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(0),
+          bottomRight: Radius.circular(0),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          _buildRailItem(0, Icons.home_outlined, Icons.home, 'Today',
+              AppColors.gradientBrand, isDark, inactiveColor),
+          _buildRailItem(1, Icons.fitness_center_outlined, Icons.fitness_center,
+              'Train', AppColors.gradientEnergy, isDark, inactiveColor),
+          _buildRailItem(
+              2,
+              Icons.bar_chart_outlined,
+              Icons.bar_chart,
+              'Progress',
+              const LinearGradient(
+                  colors: [Color(0xFF26B6E8), Color(0xFF9182F9)]),
+              isDark,
+              inactiveColor),
+          _buildRailItem(
+              3,
+              Icons.qr_code_scanner_outlined,
+              Icons.qr_code_scanner,
+              'Pass',
+              const LinearGradient(
+                  colors: [Color(0xFFFFB03A), Color(0xFFFF4B8C)]),
+              isDark,
+              inactiveColor),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _showSettingsDialog(context),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Icon(Icons.settings_outlined,
+                  size: 20, color: inactiveColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRailItem(
+    int index,
+    IconData outlineIcon,
+    IconData solidIcon,
+    String label,
+    LinearGradient activeGradient,
+    bool isDark,
+    Color inactiveColor,
+  ) {
+    final isActive = _currentIndex == index;
+    final activeIconColor = isDark ? Colors.black : Colors.white;
+
+    return GestureDetector(
+      onTap: () {
+        if (_currentIndex != index) setState(() => _currentIndex = index);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: isActive ? activeGradient : null,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? solidIcon : outlineIcon,
+              size: 20,
+              color: isActive ? activeIconColor : inactiveColor,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppStyles.bodyFont.copyWith(
+                fontSize: 9,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                color: isActive ? activeIconColor : inactiveColor,
+              ),
             ),
           ],
         ),
@@ -168,7 +322,7 @@ class _MainLayoutState extends State<MainLayout> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: AppColors.brand.withOpacity(0.15),
+                          color: AppColors.brand.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -216,19 +370,6 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _handleLogout,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: context.border),
-              ),
-              child: Icon(Icons.exit_to_app, size: 18, color: context.mutedFg),
-            ),
-          ),
         ],
       ),
     );
@@ -238,10 +379,21 @@ class _MainLayoutState extends State<MainLayout> {
     final user = supabase.auth.currentUser;
     final controller = TextEditingController();
 
+    // Pre-populate with current name as soon as it loads
+    supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user!.id)
+        .maybeSingle()
+        .then((data) {
+      final name = data?['full_name'] as String?;
+      if (name != null && name.isNotEmpty) controller.text = name;
+    });
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.card,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: dialogContext.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Edit Profile',
@@ -258,18 +410,18 @@ class _MainLayoutState extends State<MainLayout> {
               'FULL NAME',
               style: AppStyles.eyebrow.copyWith(
                 fontSize: 10,
-                color: context.mutedFg,
+                color: dialogContext.mutedFg,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: controller,
-              style: AppStyles.bodyFont.copyWith(color: context.fg),
+              style: AppStyles.bodyFont.copyWith(color: dialogContext.fg),
               decoration: InputDecoration(
                 hintText: 'Enter your name',
-                hintStyle: TextStyle(color: context.mutedFg),
+                hintStyle: TextStyle(color: dialogContext.mutedFg),
                 filled: true,
-                fillColor: context.muted.withOpacity(0.3),
+                fillColor: dialogContext.muted.withValues(alpha: 0.3),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -280,25 +432,26 @@ class _MainLayoutState extends State<MainLayout> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: context.mutedFg)),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Cancel',
+                style: TextStyle(color: dialogContext.mutedFg)),
           ),
           ElevatedButton(
             onPressed: () async {
               if (controller.text.trim().isEmpty) return;
-
               try {
                 await supabase.from('profiles').upsert({
-                  'id': user!.id,
+                  'id': user.id,
                   'full_name': controller.text.trim(),
                   'updated_at': DateTime.now().toIso8601String(),
                 });
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                // Increment version to force DashboardScreen to rebuild
                 if (mounted) {
-                  Navigator.pop(context);
+                  setState(() => _profileVersion++);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Profile updated! Restart to see changes.'),
-                    ),
+                    const SnackBar(content: Text('Profile updated!')),
                   );
                 }
               } catch (e) {
@@ -320,67 +473,98 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _showSettingsDialog(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Settings & Account',
-          style: AppStyles.displayFont.copyWith(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: sheetCtx.card,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDialogItem(context, Icons.person_outline, 'Edit Profile', () {
-              Navigator.pop(context);
-              _showEditProfileDialog(context);
-            }),
-            _buildDialogItem(
-              context,
-              Icons.privacy_tip_outlined,
-              'Privacy Policy',
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PrivacyPolicyScreen(),
+          padding: EdgeInsets.only(
+            top: 12,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 36,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: sheetCtx.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            _buildDialogItem(
-              context,
-              Icons.description_outlined,
-              'Terms of Service',
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TermsOfServiceScreen(),
+              const SizedBox(height: 20),
+              Text(
+                'Settings & Account',
+                style: AppStyles.displayFont.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-            const Divider(),
-            _buildDialogItem(
-              context,
-              Icons.delete_forever_outlined,
-              'Delete Account',
-              () {
-                Navigator.pop(context);
-                _confirmAccountDeletion(context);
-              },
-              isDestructive: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: TextStyle(color: context.mutedFg)),
+              const SizedBox(height: 8),
+              _buildDialogItem(sheetCtx, Icons.person_outline, 'Edit Profile',
+                  () {
+                Navigator.pop(sheetCtx);
+                _showEditProfileDialog(context);
+              }),
+              _buildDialogItem(
+                sheetCtx,
+                Icons.privacy_tip_outlined,
+                'Privacy Policy',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PrivacyPolicyScreen(),
+                  ),
+                ),
+              ),
+              _buildDialogItem(
+                sheetCtx,
+                Icons.description_outlined,
+                'Terms of Service',
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TermsOfServiceScreen(),
+                  ),
+                ),
+              ),
+              const Divider(height: 24),
+              _buildDialogItem(
+                sheetCtx,
+                Icons.delete_forever_outlined,
+                'Delete Account',
+                () {
+                  Navigator.pop(sheetCtx);
+                  _confirmAccountDeletion(context);
+                },
+                isDestructive: true,
+              ),
+              _buildDialogItem(
+                sheetCtx,
+                Icons.exit_to_app_outlined,
+                'Sign Out',
+                () {
+                  Navigator.pop(sheetCtx);
+                  _handleLogout();
+                },
+                isDestructive: true,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -471,13 +655,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch $url');
-    }
-  }
-
   Widget _buildFloatingNavBar(bool isDark) {
     return Container(
       height: 72,
@@ -487,13 +664,13 @@ class _MainLayoutState extends State<MainLayout> {
         borderRadius: BorderRadius.circular(36),
         border: Border.all(
           color: isDark
-              ? Colors.black.withOpacity(0.05)
-              : Colors.white.withOpacity(0.1),
+              ? Colors.black.withValues(alpha: 0.05)
+              : Colors.white.withValues(alpha: 0.1),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),

@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
@@ -14,6 +15,14 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase must be initialized before Supabase so the messaging plugin is ready.
+  // Requires google-services.json in android/app/ + Gradle plugin enabled — see setup steps.
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase init skipped (google-services.json not configured): $e');
+  }
 
   await Supabase.initialize(
     url: 'https://inimbyivkmwgqnsbkmqg.supabase.co',
@@ -39,12 +48,15 @@ class PulseGymApp extends StatelessWidget {
           themeMode: currentMode,
           debugShowCheckedModeBanner: false,
           builder: (context, child) {
-            return ConnectivityOverlay(
-              child: Stack(
-                children: [
-                  if (child != null) child,
-                  const GlobalThemeButton(),
-                ],
+            return ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: ConnectivityOverlay(
+                child: Stack(
+                  children: [
+                    child ?? const SizedBox.shrink(),
+                    const GlobalThemeButton(),
+                  ],
+                ),
               ),
             );
           },
@@ -126,7 +138,7 @@ class _GlobalThemeButtonState extends State<GlobalThemeButton> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
