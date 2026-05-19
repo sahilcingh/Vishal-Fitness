@@ -1,8 +1,11 @@
-name: Build & Deploy to Vercel
+name: Build & Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
@@ -19,11 +22,10 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release
+        run: flutter build web --release --base-href "/Vishal-Fitness/"
 
-      - name: Deploy to Vercel
-        working-directory: ./build/web
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel deploy --prod --token ${{ secrets.VERCEL_TOKEN }} --yes --scope team_3FyRk8itXsyZLkWngTHjf1te
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
