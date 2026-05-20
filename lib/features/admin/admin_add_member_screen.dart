@@ -18,10 +18,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final _discountController = TextEditingController();
+  final _paidController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
   DateTime _startDate = DateTime.now();
+  bool _isPercent = false;
 
   List<Map<String, dynamic>> _passes = [];
   bool _isSubmitting = false;
@@ -38,6 +41,8 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _discountController.dispose();
+    _paidController.dispose();
     super.dispose();
   }
 
@@ -64,6 +69,20 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     return _startDate.add(Duration(days: _selectedPass!['duration_days'] as int));
   }
 
+  double get _passPrice => (_selectedPass?['price'] as num?)?.toDouble() ?? 0;
+
+  double get _discountAmount {
+    final val = double.tryParse(_discountController.text.trim()) ?? 0;
+    if (_isPercent) return (_passPrice * val / 100).clamp(0, _passPrice);
+    return val.clamp(0, _passPrice);
+  }
+
+  double get _effectivePrice => (_passPrice - _discountAmount).clamp(0, double.infinity);
+
+  double get _paidAmount => double.tryParse(_paidController.text.trim()) ?? 0;
+
+  double get _balance => (_effectivePrice - _paidAmount).clamp(0, double.infinity);
+
   Future<void> _pickStartDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -89,10 +108,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedPass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a pass type.'),
-          backgroundColor: Colors.redAccent,
-        ),
+        const SnackBar(content: Text('Please select a pass type.'), backgroundColor: Colors.redAccent),
       );
       return;
     }
@@ -104,9 +120,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
         body: {
           'name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
-          'email': _emailController.text.trim().isEmpty
-              ? null
-              : _emailController.text.trim(),
+          'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
           'gender': _selectedGender,
           'pass_id': _selectedPass!['id'],
           'start_date': DateFormat('yyyy-MM-dd').format(_startDate),
@@ -124,11 +138,47 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
         return;
       }
 
+      final userId = data['user_id'] as String;
+
+      // Fetch the created subscription
+      final subRes = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .single();
+
+      final subscriptionId = subRes['id'] as String;
+
+      // Apply discount if any
+      if (_discountAmount > 0) {
+        await supabase
+            .from('subscriptions')
+            .update({'discount_amount': _discountAmount})
+            .eq('id', subscriptionId);
+      }
+
+      // Record initial payment if any
+      if (_paidAmount > 0) {
+        await supabase.from('payments').insert({
+          'subscription_id': subscriptionId,
+          'user_id': userId,
+          'amount': _paidAmount,
+          'payment_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          'payment_method': 'cash',
+          'notes': 'Initial payment at enrollment',
+        });
+      }
+
       _showSuccessDialog(
         name: _nameController.text.trim(),
         email: data['email'] as String,
         password: data['temp_password'] as String,
         endDate: data['end_date'] as String,
+        totalFee: _effectivePrice,
+        paid: _paidAmount,
+        balance: _balance,
       );
     } catch (e) {
       if (mounted) {
@@ -146,6 +196,9 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     required String email,
     required String password,
     required String endDate,
+    required double totalFee,
+    required double paid,
+    required double balance,
   }) {
     showDialog(
       context: context,
@@ -184,7 +237,25 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
               '$name has been added successfully.',
               style: AppStyles.bodyFont.copyWith(color: ctx.fg, fontSize: 14),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            // Payment summary
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: ctx.bg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _successStat(ctx, 'TOTAL', '₹${totalFee.toStringAsFixed(0)}', ctx.fg),
+                  _successStat(ctx, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
+                  _successStat(ctx, 'BALANCE', '₹${balance.toStringAsFixed(0)}',
+                      balance > 0 ? AppColors.energy : AppColors.brand),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             _buildCredentialTile(ctx, 'Login Email', email),
             const SizedBox(height: 10),
             _buildCredentialTile(ctx, 'Temp Password', password),
@@ -210,7 +281,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Share these credentials with the member. They can reset the password anytime using Forgot Password.',
+                      'Share these credentials with the member. They can reset the password anytime.',
                       style: AppStyles.bodyFont.copyWith(
                         color: AppColors.sun,
                         fontSize: 11,
@@ -248,6 +319,19 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     );
   }
 
+  Widget _successStat(BuildContext context, String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label,
+            style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(9))),
+        SizedBox(height: context.h(4)),
+        Text(value,
+            style: AppStyles.displayFont.copyWith(
+                fontSize: context.sp(16), fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
   Widget _buildCredentialTile(BuildContext context, String label, String value,
       {bool copyable = true}) {
     return Container(
@@ -263,19 +347,12 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label.toUpperCase(),
-                  style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: 9),
-                ),
+                Text(label.toUpperCase(),
+                    style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: 9)),
                 const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: AppStyles.bodyFont.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: context.fg,
-                  ),
-                ),
+                Text(value,
+                    style: AppStyles.bodyFont.copyWith(
+                        fontWeight: FontWeight.w600, fontSize: 13, color: context.fg)),
               ],
             ),
           ),
@@ -284,10 +361,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Copied to clipboard'),
-                    duration: Duration(seconds: 1),
-                  ),
+                  const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
                 );
               },
               child: Icon(Icons.copy_outlined, size: 16, color: context.mutedFg),
@@ -302,10 +376,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _nameController.clear();
     _phoneController.clear();
     _emailController.clear();
+    _discountController.clear();
+    _paidController.clear();
     setState(() {
       _selectedGender = null;
       _selectedPass = null;
       _startDate = DateTime.now();
+      _isPercent = false;
     });
   }
 
@@ -410,11 +487,8 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                         label: 'Start Date *',
                         value: fmt.format(_startDate),
                         icon: Icons.calendar_today_outlined,
-                        trailing: Icon(
-                          Icons.edit_calendar_outlined,
-                          size: context.r(16),
-                          color: context.mutedFg,
-                        ),
+                        trailing: Icon(Icons.edit_calendar_outlined,
+                            size: context.r(16), color: context.mutedFg),
                       ),
                     ),
                     if (_selectedPass != null) ...[
@@ -424,6 +498,141 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                         value: fmt.format(_endDate),
                         icon: Icons.event_available_outlined,
                         valueColor: AppColors.brand,
+                      ),
+                    ],
+
+                    SizedBox(height: context.h(28)),
+
+                    // ── Payment Details ───────────────────────────
+                    _sectionLabel('PAYMENT DETAILS'),
+                    SizedBox(height: context.h(12)),
+
+                    // Discount type toggle
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _isPercent = false),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: context.h(12)),
+                              decoration: BoxDecoration(
+                                color: !_isPercent ? AppColors.brand : Colors.transparent,
+                                borderRadius: BorderRadius.circular(context.r(10)),
+                                border: Border.all(
+                                    color: !_isPercent ? AppColors.brand : context.border),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '₹ Amount',
+                                  style: AppStyles.bodyFont.copyWith(
+                                    color: !_isPercent ? Colors.white : context.mutedFg,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: context.sp(13),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: context.w(10)),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _isPercent = true),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: context.h(12)),
+                              decoration: BoxDecoration(
+                                color: _isPercent ? AppColors.brand : Colors.transparent,
+                                borderRadius: BorderRadius.circular(context.r(10)),
+                                border: Border.all(
+                                    color: _isPercent ? AppColors.brand : context.border),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '% Percent',
+                                  style: AppStyles.bodyFont.copyWith(
+                                    color: _isPercent ? Colors.white : context.mutedFg,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: context.sp(13),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: context.h(12)),
+
+                    // Discount field
+                    _buildField(
+                      controller: _discountController,
+                      label: _isPercent ? 'Discount %' : 'Discount Amount (₹)',
+                      hint: _isPercent ? 'e.g. 10' : 'e.g. 200',
+                      icon: Icons.local_offer_outlined,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                    ),
+
+                    // Price summary (shown when pass is selected)
+                    if (_selectedPass != null) ...[
+                      SizedBox(height: context.h(12)),
+                      Container(
+                        padding: EdgeInsets.all(context.r(14)),
+                        decoration: BoxDecoration(
+                          color: context.card,
+                          borderRadius: BorderRadius.circular(context.r(12)),
+                          border: Border.all(color: context.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _priceStat(context, 'ORIGINAL',
+                                '₹${_passPrice.toStringAsFixed(0)}', context.mutedFg),
+                            _priceStat(context, 'DISCOUNT',
+                                '-₹${_discountAmount.toStringAsFixed(0)}', AppColors.energy),
+                            _priceStat(context, 'FINAL PRICE',
+                                '₹${_effectivePrice.toStringAsFixed(0)}', context.fg,
+                                bold: true),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    SizedBox(height: context.h(12)),
+
+                    // Amount paid field
+                    _buildField(
+                      controller: _paidController,
+                      label: 'Amount Paid Now (₹)',
+                      hint: 'e.g. 1500',
+                      icon: Icons.payments_outlined,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                    ),
+
+                    // Paid / Balance summary
+                    if (_paidAmount > 0 && _selectedPass != null) ...[
+                      SizedBox(height: context.h(12)),
+                      Container(
+                        padding: EdgeInsets.all(context.r(14)),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(context.r(12)),
+                          border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _priceStat(context, 'TOTAL',
+                                '₹${_effectivePrice.toStringAsFixed(0)}', context.fg),
+                            _priceStat(context, 'PAID',
+                                '₹${_paidAmount.toStringAsFixed(0)}', AppColors.brand),
+                            _priceStat(context, 'BALANCE',
+                                '₹${_balance.toStringAsFixed(0)}',
+                                _balance > 0 ? AppColors.energy : AppColors.brand,
+                                bold: true),
+                          ],
+                        ),
                       ),
                     ],
 
@@ -449,9 +658,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                  color: Colors.black,
-                                  strokeWidth: 2,
-                                ),
+                                    color: Colors.black, strokeWidth: 2),
                               )
                             : Text(
                                 'Add Member',
@@ -470,50 +677,61 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     );
   }
 
+  Widget _priceStat(BuildContext context, String label, String value, Color color,
+      {bool bold = false}) {
+    return Column(
+      children: [
+        Text(label,
+            style: AppStyles.eyebrow.copyWith(
+                color: context.mutedFg, fontSize: context.sp(9))),
+        SizedBox(height: context.h(4)),
+        Text(value,
+            style: AppStyles.displayFont.copyWith(
+              fontSize: context.sp(15),
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: color,
+            )),
+      ],
+    );
+  }
+
   Widget _sectionLabel(String label) => Padding(
         padding: EdgeInsets.only(bottom: context.h(2)),
         child: Text(
           label,
-          style: AppStyles.eyebrow.copyWith(
-            color: context.mutedFg,
-            letterSpacing: 1.5,
-          ),
+          style: AppStyles.eyebrow.copyWith(color: context.mutedFg, letterSpacing: 1.5),
         ),
       );
 
-  InputDecoration _fieldDecoration({required String label, required String hint, required IconData icon}) {
+  InputDecoration _fieldDecoration(
+      {required String label, required String hint, required IconData icon}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      hintStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(12)),
-      labelStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
+      hintStyle:
+          AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(12)),
+      labelStyle:
+          AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
       prefixIcon: Icon(icon, color: context.mutedFg, size: context.r(18)),
       filled: true,
       fillColor: context.card,
       contentPadding: EdgeInsets.symmetric(
-        horizontal: context.w(16),
-        vertical: context.h(14),
-      ),
+          horizontal: context.w(16), vertical: context.h(14)),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(context.r(12)),
-        borderSide: BorderSide(color: context.border),
-      ),
+          borderRadius: BorderRadius.circular(context.r(12)),
+          borderSide: BorderSide(color: context.border)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(context.r(12)),
-        borderSide: BorderSide(color: context.border.withValues(alpha: 0.6)),
-      ),
+          borderRadius: BorderRadius.circular(context.r(12)),
+          borderSide: BorderSide(color: context.border.withValues(alpha: 0.6))),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(context.r(12)),
-        borderSide: const BorderSide(color: AppColors.brand, width: 1.5),
-      ),
+          borderRadius: BorderRadius.circular(context.r(12)),
+          borderSide: const BorderSide(color: AppColors.brand, width: 1.5)),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(context.r(12)),
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
+          borderRadius: BorderRadius.circular(context.r(12)),
+          borderSide: const BorderSide(color: Colors.redAccent)),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(context.r(12)),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-      ),
+          borderRadius: BorderRadius.circular(context.r(12)),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
     );
   }
 
@@ -525,12 +743,14 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
+      onChanged: onChanged,
       style: AppStyles.bodyFont.copyWith(color: context.fg, fontSize: context.sp(14)),
       decoration: _fieldDecoration(label: label, hint: hint, icon: icon),
     );
@@ -552,12 +772,8 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       dropdownColor: context.card,
       style: AppStyles.bodyFont.copyWith(color: context.fg, fontSize: context.sp(13)),
       items: items
-          .map(
-            (item) => DropdownMenuItem<T>(
-              value: item,
-              child: Text(itemLabel(item), overflow: TextOverflow.ellipsis),
-            ),
-          )
+          .map((item) => DropdownMenuItem<T>(
+              value: item, child: Text(itemLabel(item), overflow: TextOverflow.ellipsis)))
           .toList(),
       onChanged: onChanged,
     );
@@ -571,10 +787,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     Widget? trailing,
   }) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.w(16),
-        vertical: context.h(14),
-      ),
+      padding: EdgeInsets.symmetric(horizontal: context.w(16), vertical: context.h(14)),
       decoration: BoxDecoration(
         color: context.card,
         borderRadius: BorderRadius.circular(context.r(12)),
@@ -588,22 +801,15 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: AppStyles.bodyFont.copyWith(
-                    color: context.mutedFg,
-                    fontSize: context.sp(11),
-                  ),
-                ),
+                Text(label,
+                    style: AppStyles.bodyFont.copyWith(
+                        color: context.mutedFg, fontSize: context.sp(11))),
                 SizedBox(height: context.h(2)),
-                Text(
-                  value,
-                  style: AppStyles.bodyFont.copyWith(
-                    color: valueColor ?? context.fg,
-                    fontWeight: FontWeight.w600,
-                    fontSize: context.sp(14),
-                  ),
-                ),
+                Text(value,
+                    style: AppStyles.bodyFont.copyWith(
+                        color: valueColor ?? context.fg,
+                        fontWeight: FontWeight.w600,
+                        fontSize: context.sp(14))),
               ],
             ),
           ),
