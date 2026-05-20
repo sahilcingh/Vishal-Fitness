@@ -20,11 +20,21 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
   bool _isLoading = true;
   bool _isExporting = false;
   _Filter _filter = _Filter.all;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _fetchData();
+    _searchController.addListener(
+        () => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
@@ -64,8 +74,18 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
     return _Filter.healthy;
   }
 
-  List<Map<String, dynamic>> get _filtered =>
-      _filter == _Filter.all ? _subs : _subs.where((s) => _categoryOf(s) == _filter).toList();
+  List<Map<String, dynamic>> get _filtered {
+    var list = _filter == _Filter.all ? _subs : _subs.where((s) => _categoryOf(s) == _filter).toList();
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((s) {
+        final profile = s['profiles'] as Map<String, dynamic>?;
+        final name = (profile?['full_name'] as String? ?? '').toLowerCase();
+        final phone = (profile?['phone'] as String? ?? '').toLowerCase();
+        return name.contains(_searchQuery) || phone.contains(_searchQuery);
+      }).toList();
+    }
+    return list;
+  }
 
   Map<_Filter, int> get _counts {
     final m = {_Filter.expired: 0, _Filter.critical: 0, _Filter.expiring: 0, _Filter.healthy: 0};
@@ -146,6 +166,8 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
                     _buildSummaryRow(),
                     SizedBox(height: context.h(24)),
                     _buildFilterChips(),
+                    SizedBox(height: context.h(12)),
+                    _buildSearchBar(),
                     SizedBox(height: context.h(16)),
                     _buildList(),
                     SizedBox(height: context.h(120)),
@@ -265,6 +287,37 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      style: AppStyles.bodyFont.copyWith(fontSize: context.sp(14), color: context.fg),
+      decoration: InputDecoration(
+        hintText: 'Search by name or phone...',
+        hintStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
+        prefixIcon: Icon(Icons.search, color: context.mutedFg, size: context.r(18)),
+        suffixIcon: _searchQuery.isNotEmpty
+            ? IconButton(
+                icon: Icon(Icons.clear, color: context.mutedFg, size: context.r(18)),
+                onPressed: () => _searchController.clear(),
+              )
+            : null,
+        filled: true,
+        fillColor: context.card,
+        contentPadding: EdgeInsets.symmetric(
+            horizontal: context.w(16), vertical: context.h(12)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(context.r(12)),
+            borderSide: BorderSide(color: context.border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(context.r(12)),
+            borderSide: BorderSide(color: context.border.withValues(alpha: 0.6))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(context.r(12)),
+            borderSide: const BorderSide(color: AppColors.brand, width: 1.5)),
       ),
     );
   }

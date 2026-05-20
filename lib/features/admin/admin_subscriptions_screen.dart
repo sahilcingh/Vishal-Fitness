@@ -7,6 +7,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../main.dart';
 import 'package:intl/intl.dart';
+import 'admin_edit_member_screen.dart';
 
 class AdminSubscriptionsScreen extends StatefulWidget {
   const AdminSubscriptionsScreen({super.key});
@@ -20,11 +21,28 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
   List<Map<String, dynamic>> _subscriptions = [];
   Map<String, double> _paidAmounts = {};
   final Set<String> _expandedIds = {};
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _filteredSubs {
+    if (_searchQuery.isEmpty) return _subscriptions;
+    return _subscriptions.where((sub) {
+      final profile = sub['profiles'] ?? {};
+      final name = (profile['full_name'] as String? ?? '').toLowerCase();
+      final phone = (profile['phone'] as String? ?? '').toLowerCase();
+      final memberNo = _membershipNo(sub['user_id'] as String).toLowerCase();
+      return name.contains(_searchQuery) ||
+          phone.contains(_searchQuery) ||
+          memberNo.contains(_searchQuery);
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchSubscriptions();
+    _searchController.addListener(
+        () => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
   }
 
   Future<void> _fetchSubscriptions() async {
@@ -33,37 +51,48 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
       final subRes = await supabase
           .from('subscriptions')
           .select('''
-            id,
-            start_date,
-            end_date,
-            status,
-            user_id,
-            discount_amount,
-            profiles:user_id ( full_name, phone ),
+            id, start_date, end_date, status, user_id, discount_amount, pass_id,
+            profiles:user_id ( full_name, phone, photo_url, time_slot ),
             gym_passes:pass_id ( name, duration_days, price )
           ''')
           .order('end_date', ascending: true);
-
-      final payRes = await supabase
-          .from('payments')
-          .select('subscription_id, amount');
-
-      final Map<String, double> paidMap = {};
-      for (final p in List<Map<String, dynamic>>.from(payRes)) {
-        final sid = p['subscription_id'] as String;
-        paidMap[sid] = (paidMap[sid] ?? 0) + (p['amount'] as num).toDouble();
+      await _applyResults(subRes);
+    } catch (_) {
+      // photo_url / time_slot columns may not exist yet — fall back to basic query
+      try {
+        final subRes = await supabase
+            .from('subscriptions')
+            .select('''
+              id, start_date, end_date, status, user_id, discount_amount, pass_id,
+              profiles:user_id ( full_name, phone ),
+              gym_passes:pass_id ( name, duration_days, price )
+            ''')
+            .order('end_date', ascending: true);
+        await _applyResults(subRes);
+      } catch (e2) {
+        debugPrint('Error fetching subscriptions: $e2');
+        if (mounted) setState(() => _isLoading = false);
       }
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          _subscriptions = List<Map<String, dynamic>>.from(subRes);
-          _paidAmounts = paidMap;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching subscriptions: $e');
-      if (mounted) setState(() => _isLoading = false);
+  Future<void> _applyResults(List subRes) async {
+    final payRes = await supabase
+        .from('payments')
+        .select('subscription_id, amount');
+
+    final Map<String, double> paidMap = {};
+    for (final p in List<Map<String, dynamic>>.from(payRes)) {
+      final sid = p['subscription_id'] as String;
+      paidMap[sid] = (paidMap[sid] ?? 0) + (p['amount'] as num).toDouble();
+    }
+
+    if (mounted) {
+      setState(() {
+        _subscriptions = List<Map<String, dynamic>>.from(subRes);
+        _paidAmounts = paidMap;
+        _isLoading = false;
+      });
     }
   }
 
@@ -218,6 +247,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
     );
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   String _membershipNo(String userId) =>
       'MBR-${userId.replaceAll('-', '').substring(0, 6).toUpperCase()}';
 
@@ -235,23 +270,71 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
       backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-          : _subscriptions.isEmpty
-              ? Center(
-                  child: Text(
-                    'No subscriptions found.',
-                    style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
-                  ),
-                )
-              : ListView.builder(
+          : Column(
+              children: [
+                Padding(
                   padding: EdgeInsets.fromLTRB(
                     context.w(AppStyles.containerPadding),
-                    context.h(16),
+                    context.h(12),
                     context.w(AppStyles.containerPadding),
-                    context.h(120),
+                    context.h(8),
                   ),
-                  itemCount: _subscriptions.length,
-                  itemBuilder: (context, index) {
-                    final sub = _subscriptions[index];
+                  child: TextField(
+                    controller: _searchController,
+                    style: AppStyles.bodyFont.copyWith(
+                        fontSize: context.sp(14), color: context.fg),
+                    decoration: InputDecoration(
+                      hintText: 'Search by name, phone or MBR...',
+                      hintStyle: AppStyles.bodyFont.copyWith(
+                          color: context.mutedFg, fontSize: context.sp(13)),
+                      prefixIcon:
+                          Icon(Icons.search, color: context.mutedFg, size: context.r(18)),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear,
+                                  color: context.mutedFg, size: context.r(18)),
+                              onPressed: () => _searchController.clear(),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: context.card,
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: context.w(16), vertical: context.h(12)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(context.r(12)),
+                          borderSide: BorderSide(color: context.border)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(context.r(12)),
+                          borderSide:
+                              BorderSide(color: context.border.withValues(alpha: 0.6))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(context.r(12)),
+                          borderSide:
+                              const BorderSide(color: AppColors.brand, width: 1.5)),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _filteredSubs.isEmpty
+                      ? Center(
+                          child: Text(
+                            _searchQuery.isEmpty
+                                ? 'No subscriptions found.'
+                                : 'No results for "$_searchQuery".',
+                            style:
+                                AppStyles.bodyFont.copyWith(color: context.mutedFg),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.fromLTRB(
+                            context.w(AppStyles.containerPadding),
+                            context.h(4),
+                            context.w(AppStyles.containerPadding),
+                            context.h(120),
+                          ),
+                          itemCount: _filteredSubs.length,
+                          itemBuilder: (context, index) {
+                            final sub = _filteredSubs[index];
                     final id = sub['id'] as String;
                     final isExpanded = _expandedIds.contains(id);
                     final profile = sub['profiles'] ?? {};
@@ -267,6 +350,9 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     final balance = effectivePrice - paid;
                     final name = profile['full_name'] as String? ?? 'Unknown';
                     final memberNo = _membershipNo(sub['user_id'] as String);
+                    final photoUrl = profile['photo_url'] as String?;
+                    final timeSlot = profile['time_slot'] as String?;
+                    final passId = sub['pass_id'] as String?;
 
                     return GestureDetector(
                       onTap: () => setState(() {
@@ -302,146 +388,153 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                 horizontal: context.w(14),
                                 vertical: context.h(12),
                               ),
-                              child: Row(
+                              child: Column(
                                 children: [
-                                  // Initials avatar
-                                  Container(
-                                    width: context.r(38),
-                                    height: context.r(38),
-                                    decoration: BoxDecoration(
-                                      color: (isExpired ? AppColors.energy : AppColors.brand)
-                                          .withValues(alpha: 0.12),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        _initials(name),
-                                        style: AppStyles.displayFont.copyWith(
-                                          fontSize: context.sp(13),
-                                          fontWeight: FontWeight.bold,
-                                          color: isExpired ? AppColors.energy : AppColors.brand,
+                                  // Row 1: Avatar + Name/Phone + Status/Chevron
+                                  Row(
+                                    children: [
+                                      // Avatar (photo or initials)
+                                      Container(
+                                        width: context.r(38),
+                                        height: context.r(38),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: (isExpired ? AppColors.energy : AppColors.brand)
+                                              .withValues(alpha: 0.12),
+                                          image: photoUrl != null
+                                              ? DecorationImage(
+                                                  image: NetworkImage(photoUrl),
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : null,
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: context.w(10)),
-                                  // Name + MBR + phone
-                                  Flexible(
-                                    flex: 3,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppStyles.displayFont.copyWith(
-                                            fontSize: context.sp(13),
-                                            fontWeight: FontWeight.bold,
-                                            color: context.fg,
-                                          ),
-                                        ),
-                                        SizedBox(height: context.h(2)),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: context.w(5),
-                                                vertical: context.h(1),
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.brand.withValues(alpha: 0.08),
-                                                borderRadius: BorderRadius.circular(context.r(4)),
-                                              ),
-                                              child: Text(
-                                                memberNo,
-                                                style: AppStyles.eyebrow.copyWith(
-                                                  fontSize: context.sp(8),
-                                                  color: AppColors.brand,
-                                                  fontWeight: FontWeight.bold,
+                                        child: photoUrl == null
+                                            ? Center(
+                                                child: Text(
+                                                  _initials(name),
+                                                  style: AppStyles.displayFont.copyWith(
+                                                    fontSize: context.sp(13),
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isExpired ? AppColors.energy : AppColors.brand,
+                                                  ),
                                                 ),
+                                              )
+                                            : null,
+                                      ),
+                                      SizedBox(width: context.w(10)),
+                                      // Name + MBR + phone
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppStyles.displayFont.copyWith(
+                                                fontSize: context.sp(13),
+                                                fontWeight: FontWeight.bold,
+                                                color: context.fg,
                                               ),
                                             ),
-                                            SizedBox(width: context.w(5)),
-                                            Flexible(
-                                              child: Text(
-                                                profile['phone'] ?? '',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: AppStyles.bodyFont.copyWith(
-                                                  fontSize: context.sp(10),
-                                                  color: context.mutedFg,
+                                            SizedBox(height: context.h(2)),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: context.w(5),
+                                                    vertical: context.h(1),
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.brand.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(context.r(4)),
+                                                  ),
+                                                  child: Text(
+                                                    memberNo,
+                                                    style: AppStyles.eyebrow.copyWith(
+                                                      fontSize: context.sp(8),
+                                                      color: AppColors.brand,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
+                                                SizedBox(width: context.w(5)),
+                                                Flexible(
+                                                  child: Text(
+                                                    profile['phone'] ?? '',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: AppStyles.bodyFont.copyWith(
+                                                      fontSize: context.sp(10),
+                                                      color: context.mutedFg,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(width: context.w(8)),
-                                  // ── Inline financial strip ──
-                                  Expanded(
-                                    flex: 4,
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: context.h(6),
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: context.bg,
-                                        borderRadius: BorderRadius.circular(context.r(8)),
-                                      ),
-                                      child: Row(
+                                      SizedBox(width: context.w(8)),
+                                      // Status + chevron
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
                                         children: [
-                                          _miniStat(context, 'PRICE', '₹${effectivePrice.toStringAsFixed(0)}', context.fg),
-                                          _vertDivider(context),
-                                          _miniStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
-                                          _vertDivider(context),
-                                          _miniStat(
-                                            context,
-                                            'BALANCE',
-                                            '₹${balance.toStringAsFixed(0)}',
-                                            balance > 0 ? AppColors.energy : AppColors.brand,
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: context.w(7),
+                                              vertical: context.h(3),
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isExpired
+                                                  ? AppColors.energy.withValues(alpha: 0.1)
+                                                  : AppColors.brand.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(context.r(6)),
+                                            ),
+                                            child: Text(
+                                              sub['status'].toString().toUpperCase(),
+                                              style: AppStyles.eyebrow.copyWith(
+                                                color: isExpired ? AppColors.energy : AppColors.brand,
+                                                fontSize: context.sp(9),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(height: context.h(4)),
+                                          AnimatedRotation(
+                                            turns: isExpanded ? 0.5 : 0,
+                                            duration: const Duration(milliseconds: 200),
+                                            child: Icon(
+                                              Icons.keyboard_arrow_down,
+                                              size: context.r(18),
+                                              color: context.mutedFg,
+                                            ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
-                                  SizedBox(width: context.w(8)),
-                                  // Status + chevron
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: context.w(7),
-                                          vertical: context.h(3),
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isExpired
-                                              ? AppColors.energy.withValues(alpha: 0.1)
-                                              : AppColors.brand.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(context.r(6)),
-                                        ),
-                                        child: Text(
-                                          sub['status'].toString().toUpperCase(),
-                                          style: AppStyles.eyebrow.copyWith(
-                                            color: isExpired ? AppColors.energy : AppColors.brand,
-                                            fontSize: context.sp(9),
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(height: context.h(4)),
-                                      AnimatedRotation(
-                                        turns: isExpanded ? 0.5 : 0,
-                                        duration: const Duration(milliseconds: 200),
-                                        child: Icon(
-                                          Icons.keyboard_arrow_down,
-                                          size: context.r(18),
-                                          color: context.mutedFg,
-                                        ),
-                                      ),
                                     ],
+                                  ),
+                                  SizedBox(height: context.h(8)),
+                                  // Row 2: Full-width financial strip (4 cols)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(vertical: context.h(6)),
+                                    decoration: BoxDecoration(
+                                      color: context.bg,
+                                      borderRadius: BorderRadius.circular(context.r(8)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _miniStat(context, 'TOTAL', '₹${effectivePrice.toStringAsFixed(0)}', context.fg),
+                                        _vertDivider(context),
+                                        _miniStat(context, 'DISC',
+                                            discountAmount > 0 ? '₹${discountAmount.toStringAsFixed(0)}' : '—',
+                                            discountAmount > 0 ? AppColors.sun : context.mutedFg),
+                                        _vertDivider(context),
+                                        _miniStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
+                                        _vertDivider(context),
+                                        _miniStat(context, 'BAL', '₹${balance.toStringAsFixed(0)}',
+                                            balance > 0 ? AppColors.energy : AppColors.brand),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -478,6 +571,19 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                   ),
                                                 ],
                                               ),
+                                              if (timeSlot != null) ...[
+                                                SizedBox(height: context.h(12)),
+                                                Row(
+                                                  children: [
+                                                    _detailCell(
+                                                      context,
+                                                      'TIME SLOT',
+                                                      timeSlot,
+                                                      AppColors.brand,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                               SizedBox(height: context.h(12)),
                                               // Start + End dates
                                               Row(
@@ -607,10 +713,38 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                 ),
                                               ),
                                               SizedBox(height: context.h(10)),
-                                              // Status actions
+                                              // Actions: Edit Member + Change Status
                                               Row(
-                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                 children: [
+                                                  OutlinedButton.icon(
+                                                    onPressed: () => Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) => AdminEditMemberScreen(
+                                                          userId: sub['user_id'] as String,
+                                                          subscriptionId: id,
+                                                          initialPassId: passId,
+                                                          initialStartDate: startDate,
+                                                          onSaved: _fetchSubscriptions,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    icon: Icon(Icons.edit_outlined, size: context.r(14)),
+                                                    label: Text('Edit Member',
+                                                        style: TextStyle(fontSize: context.sp(12))),
+                                                    style: OutlinedButton.styleFrom(
+                                                      foregroundColor: context.fg,
+                                                      side: BorderSide(color: context.border),
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: context.w(10),
+                                                        vertical: context.h(7),
+                                                      ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(context.r(8)),
+                                                      ),
+                                                    ),
+                                                  ),
                                                   PopupMenuButton<String>(
                                                     child: Row(
                                                       children: [
@@ -658,8 +792,11 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                         ),
                       ),
                     );
-                  },
-                ),
+                          },
+                        ),
+                  ),
+                ],
+              ),
     );
   }
 
@@ -793,6 +930,43 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
   Future<void> _recordPayment() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) return;
+
+    final pass = widget.subscription['gym_passes'] ?? {};
+    final passPrice = (pass['price'] as num?)?.toDouble() ?? 0.0;
+    final totalFee = (passPrice - widget.discountAmount).clamp(0.0, double.infinity);
+    final alreadyPaid = _payments.fold(0.0, (sum, p) => sum + (p['amount'] as num).toDouble());
+    final remainingBalance = totalFee - alreadyPaid;
+
+    if (amount > remainingBalance) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ctx.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ctx.r(16))),
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppColors.energy, size: ctx.r(22)),
+              SizedBox(width: ctx.w(8)),
+              Text('Amount Exceeds Balance',
+                  style: AppStyles.displayFont.copyWith(fontSize: ctx.sp(16), fontWeight: FontWeight.bold, color: ctx.fg)),
+            ],
+          ),
+          content: Text(
+            'Payment of ₹${amount.toStringAsFixed(0)} exceeds the remaining balance of ₹${remainingBalance.toStringAsFixed(0)}. Please enter a valid amount.',
+            style: AppStyles.bodyFont.copyWith(fontSize: ctx.sp(13), color: ctx.fg),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
+              child: const Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {

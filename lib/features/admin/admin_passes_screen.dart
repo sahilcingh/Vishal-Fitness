@@ -17,11 +17,29 @@ class AdminPassesScreen extends StatefulWidget {
 class _AdminPassesScreenState extends State<AdminPassesScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _passes = [];
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _filteredPasses {
+    if (_searchQuery.isEmpty) return _passes;
+    return _passes.where((p) {
+      final name = (p['name'] as String? ?? '').toLowerCase();
+      return name.contains(_searchQuery);
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchPasses();
+    _searchController.addListener(
+        () => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchPasses() async {
@@ -165,6 +183,7 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
       floatingActionButton: Padding(
         padding: EdgeInsets.only(bottom: context.h(80.0)),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_passes',
           onPressed: () => _showPassForm(),
           backgroundColor: AppColors.energy,
           icon: const Icon(Icons.add, color: Colors.white),
@@ -173,18 +192,45 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-          : _passes.isEmpty
-              ? Center(
-                  child: Text(
-                    'No passes configured.',
-                    style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+          : Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(12), context.w(AppStyles.containerPadding), context.h(8)),
+                  child: TextField(
+                    controller: _searchController,
+                    style: AppStyles.bodyFont.copyWith(fontSize: context.sp(14), color: context.fg),
+                    decoration: InputDecoration(
+                      hintText: 'Search passes...',
+                      hintStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
+                      prefixIcon: Icon(Icons.search, color: context.mutedFg, size: context.r(18)),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: context.mutedFg, size: context.r(18)),
+                              onPressed: () => _searchController.clear(),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: context.card,
+                      contentPadding: EdgeInsets.symmetric(horizontal: context.w(16), vertical: context.h(12)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: BorderSide(color: context.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: BorderSide(color: context.border.withValues(alpha: 0.6))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: const BorderSide(color: AppColors.brand, width: 1.5)),
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(16), context.w(AppStyles.containerPadding), context.h(120)),
-                  itemCount: _passes.length,
-                  itemBuilder: (context, index) {
-                    final pass = _passes[index];
+                ),
+                Expanded(
+                  child: _filteredPasses.isEmpty
+                      ? Center(
+                          child: Text(
+                            _searchQuery.isEmpty ? 'No passes configured.' : 'No results for "$_searchQuery".',
+                            style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(4), context.w(AppStyles.containerPadding), context.h(120)),
+                          itemCount: _filteredPasses.length,
+                          itemBuilder: (context, index) {
+                            final pass = _filteredPasses[index];
                     final isActive = pass['is_active'] as bool;
                     final features = pass['features'] as List<dynamic>? ?? [];
 
@@ -278,8 +324,11 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
                         ],
                       ),
                     );
-                  },
+                          },
+                        ),
                 ),
+              ],
+            ),
     );
   }
 }

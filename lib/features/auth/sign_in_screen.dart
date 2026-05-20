@@ -9,6 +9,7 @@ import '../../core/utils/responsive_utils.dart';
 import '../main_layout.dart';
 import '../admin/admin_layout.dart';
 import '../onboarding/programs_screen.dart';
+import 'change_password_screen.dart';
 import '../../main.dart';
 
 /// Sign In Screen with dynamic layout.
@@ -82,13 +83,24 @@ class _SignInScreenState extends State<SignInScreen> {
 
     // MEMBER FLOW
     if (isSignIn) {
-      // Member Sign In
+      // Member Sign In — also accepts 10-digit phone number
       setState(() => isLoading = true);
       try {
-        await supabase.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
+        String signinEmail = email;
+        final onlyDigits = email.replaceAll(RegExp(r'[^0-9]'), '');
+        if (onlyDigits.length == 10 && !email.contains('@')) {
+          final found = await supabase.rpc(
+            'get_email_by_phone',
+            params: {'phone_input': onlyDigits},
+          ) as String?;
+          if (found == null || found.isEmpty) {
+            _showError('No account found for this phone number.');
+            setState(() => isLoading = false);
+            return;
+          }
+          signinEmail = found;
+        }
+        await supabase.auth.signInWithPassword(email: signinEmail, password: password);
         await _navigateToDashboard();
       } on AuthException catch (e) {
         _showError(e.message);
@@ -338,7 +350,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (user != null) {
         final profile = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, needs_password_reset')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -346,9 +358,17 @@ class _SignInScreenState extends State<SignInScreen> {
           final isRoleAdmin = profile?['role'] == 'admin';
 
           if (isAdminMode && !isRoleAdmin) {
-            // Log out if they tried to log in via admin portal but aren't admin
             await supabase.auth.signOut();
             _showError('Access denied. Admin privileges required.');
+            return;
+          }
+
+          final needsReset = profile?['needs_password_reset'] as bool? ?? false;
+          if (!isRoleAdmin && needsReset) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+            );
             return;
           }
 
@@ -927,11 +947,11 @@ class _SignInScreenState extends State<SignInScreen> {
         ],
 
         // --- Standard Fields ---
-        _buildInputLabel(isAdminMode ? 'ADMIN EMAIL' : 'EMAIL'),
+        _buildInputLabel(isAdminMode ? 'ADMIN EMAIL' : (isSignIn ? 'EMAIL OR PHONE' : 'EMAIL')),
         _buildTextField(
           _emailController,
-          isAdminMode ? 'admin@gym.com' : 'you@gmail.com',
-          TextInputType.emailAddress,
+          isAdminMode ? 'admin@gym.com' : (isSignIn ? 'you@gmail.com or 9876543210' : 'you@gmail.com'),
+          isSignIn && !isAdminMode ? TextInputType.emailAddress : TextInputType.emailAddress,
         ),
         SizedBox(height: context.h(20)),
 

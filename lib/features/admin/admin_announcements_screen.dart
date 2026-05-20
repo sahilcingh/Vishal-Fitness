@@ -18,11 +18,30 @@ class AdminAnnouncementsScreen extends StatefulWidget {
 class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _announcements = [];
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _filteredAnnouncements {
+    if (_searchQuery.isEmpty) return _announcements;
+    return _announcements.where((a) {
+      final title = (a['title'] as String? ?? '').toLowerCase();
+      final message = (a['message'] as String? ?? '').toLowerCase();
+      return title.contains(_searchQuery) || message.contains(_searchQuery);
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchAnnouncements();
+    _searchController.addListener(
+        () => setState(() => _searchQuery = _searchController.text.trim().toLowerCase()));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAnnouncements() async {
@@ -140,6 +159,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       floatingActionButton: Padding(
         padding: EdgeInsets.only(bottom: context.h(80.0)),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_announcements',
           onPressed: _showAddAnnouncementDialog,
           backgroundColor: AppColors.sun,
           icon: const Icon(Icons.add, color: Colors.black),
@@ -148,18 +168,45 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-          : _announcements.isEmpty
-              ? Center(
-                  child: Text(
-                    'No announcements yet.',
-                    style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+          : Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(12), context.w(AppStyles.containerPadding), context.h(8)),
+                  child: TextField(
+                    controller: _searchController,
+                    style: AppStyles.bodyFont.copyWith(fontSize: context.sp(14), color: context.fg),
+                    decoration: InputDecoration(
+                      hintText: 'Search announcements...',
+                      hintStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: context.sp(13)),
+                      prefixIcon: Icon(Icons.search, color: context.mutedFg, size: context.r(18)),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: context.mutedFg, size: context.r(18)),
+                              onPressed: () => _searchController.clear(),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: context.card,
+                      contentPadding: EdgeInsets.symmetric(horizontal: context.w(16), vertical: context.h(12)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: BorderSide(color: context.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: BorderSide(color: context.border.withValues(alpha: 0.6))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(12)), borderSide: const BorderSide(color: AppColors.brand, width: 1.5)),
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(16), context.w(AppStyles.containerPadding), context.h(120)),
-                  itemCount: _announcements.length,
-                  itemBuilder: (context, index) {
-                    final item = _announcements[index];
+                ),
+                Expanded(
+                  child: _filteredAnnouncements.isEmpty
+                      ? Center(
+                          child: Text(
+                            _searchQuery.isEmpty ? 'No announcements yet.' : 'No results for "$_searchQuery".',
+                            style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.fromLTRB(context.w(AppStyles.containerPadding), context.h(4), context.w(AppStyles.containerPadding), context.h(120)),
+                          itemCount: _filteredAnnouncements.length,
+                          itemBuilder: (context, index) {
+                            final item = _filteredAnnouncements[index];
                     final date = DateTime.parse(item['created_at']);
                     final isActive = item['is_active'] as bool;
 
@@ -235,8 +282,11 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         ],
                       ),
                     );
-                  },
+                          },
+                        ),
                 ),
+              ],
+            ),
     );
   }
 }

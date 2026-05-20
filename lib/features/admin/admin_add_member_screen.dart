@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
@@ -20,11 +22,14 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   final _emailController = TextEditingController();
   final _discountController = TextEditingController();
   final _paidController = TextEditingController();
+  final _timeSlotController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
   DateTime _startDate = DateTime.now();
   bool _isPercent = false;
+  XFile? _pickedImage;
+  Uint8List? _imageBytes;
 
   List<Map<String, dynamic>> _passes = [];
   bool _isSubmitting = false;
@@ -43,7 +48,62 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _emailController.dispose();
     _discountController.dispose();
     _paidController.dispose();
+    _timeSlotController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: ctx.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(ctx.r(20))),
+        ),
+        padding: EdgeInsets.all(ctx.r(20)),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: ctx.w(40),
+                height: ctx.h(4),
+                decoration: BoxDecoration(color: ctx.border, borderRadius: BorderRadius.circular(2)),
+                margin: EdgeInsets.only(bottom: ctx.h(16)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: AppColors.brand),
+                title: Text('Choose from Gallery', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined, color: AppColors.brand),
+                title: Text('Take a Photo', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null) return;
+    try {
+      final xfile = await ImagePicker().pickImage(source: source, imageQuality: 70, maxWidth: 512);
+      if (xfile != null && mounted) {
+        final bytes = await xfile.readAsBytes();
+        setState(() {
+          _pickedImage = xfile;
+          _imageBytes = bytes;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not pick image: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   Future<void> _fetchPasses() async {
@@ -113,6 +173,27 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       return;
     }
 
+    // Amount validation
+    final rawDiscount = double.tryParse(_discountController.text.trim()) ?? 0;
+    if (_isPercent && rawDiscount > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Discount percentage cannot exceed 100%.'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    if (!_isPercent && rawDiscount > _passPrice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Discount cannot exceed pass price (₹${_passPrice.toStringAsFixed(0)}).'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    if (_paidAmount > _effectivePrice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Amount paid (₹${_paidAmount.toStringAsFixed(0)}) exceeds effective price (₹${_effectivePrice.toStringAsFixed(0)}).'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final response = await supabase.functions.invoke(
@@ -169,6 +250,26 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
           'payment_method': 'cash',
           'notes': 'Initial payment at enrollment',
         });
+      }
+
+      // Upload photo + update profile extras
+      final profileUpdate = <String, dynamic>{'needs_password_reset': true};
+      if (_timeSlotController.text.trim().isNotEmpty) profileUpdate['time_slot'] = _timeSlotController.text.trim();
+      if (_imageBytes != null && _pickedImage != null) {
+        try {
+          final ext = _pickedImage!.name.contains('.')
+              ? _pickedImage!.name.split('.').last.toLowerCase()
+              : 'jpg';
+          final storagePath = '$userId/avatar.$ext';
+          await supabase.storage
+              .from('member-photos')
+              .uploadBinary(storagePath, _imageBytes!, fileOptions: const FileOptions(upsert: true));
+          profileUpdate['photo_url'] =
+              supabase.storage.from('member-photos').getPublicUrl(storagePath);
+        } catch (_) {}
+      }
+      if (profileUpdate.isNotEmpty) {
+        await supabase.from('profiles').update(profileUpdate).eq('id', userId);
       }
 
       _showSuccessDialog(
@@ -378,11 +479,14 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _emailController.clear();
     _discountController.clear();
     _paidController.clear();
+    _timeSlotController.clear();
     setState(() {
       _selectedGender = null;
       _selectedPass = null;
       _startDate = DateTime.now();
       _isPercent = false;
+      _pickedImage = null;
+      _imageBytes = null;
     });
   }
 
@@ -423,6 +527,52 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Photo ─────────────────────────────────────
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: context.r(88),
+                              height: context.r(88),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.brand.withValues(alpha: 0.08),
+                                border: Border.all(
+                                  color: AppColors.brand.withValues(alpha: 0.25),
+                                  width: 2,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: _imageBytes != null
+                                    ? Image.memory(_imageBytes!, fit: BoxFit.cover,
+                                        width: context.r(88), height: context.r(88))
+                                    : Icon(Icons.person_outline,
+                                        size: context.r(36), color: AppColors.brand),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: context.r(26),
+                                height: context.r(26),
+                                decoration: BoxDecoration(
+                                  color: AppColors.brand,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: context.bg, width: 2),
+                                ),
+                                child: Icon(Icons.camera_alt,
+                                    size: context.r(12), color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: context.h(20)),
+
                     // ── Personal Details ──────────────────────────
                     _sectionLabel('PERSONAL DETAILS'),
                     SizedBox(height: context.h(12)),
@@ -441,10 +591,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       hint: 'e.g. 9876543210',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Phone is required';
-                        if (v.trim().length < 10) return 'Enter a valid 10-digit number';
+                        if (v.trim().length != 10) return 'Enter a valid 10-digit number';
                         return null;
                       },
                     ),
@@ -464,6 +617,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       items: const ['Male', 'Female', 'Other'],
                       itemLabel: (g) => g,
                       onChanged: (v) => setState(() => _selectedGender = v),
+                    ),
+                    SizedBox(height: context.h(12)),
+                    _buildField(
+                      controller: _timeSlotController,
+                      label: 'Time Slot (optional)',
+                      hint: 'e.g. 6:00 AM - 8:00 AM',
+                      icon: Icons.schedule_outlined,
                     ),
 
                     SizedBox(height: context.h(28)),
@@ -610,31 +770,30 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       onChanged: (_) => setState(() {}),
                     ),
 
-                    // Paid / Balance summary
-                    if (_paidAmount > 0 && _selectedPass != null) ...[
-                      SizedBox(height: context.h(12)),
-                      Container(
-                        padding: EdgeInsets.all(context.r(14)),
-                        decoration: BoxDecoration(
-                          color: AppColors.brand.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(context.r(12)),
-                          border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _priceStat(context, 'TOTAL',
-                                '₹${_effectivePrice.toStringAsFixed(0)}', context.fg),
-                            _priceStat(context, 'PAID',
-                                '₹${_paidAmount.toStringAsFixed(0)}', AppColors.brand),
-                            _priceStat(context, 'BALANCE',
-                                '₹${_balance.toStringAsFixed(0)}',
-                                _balance > 0 ? AppColors.energy : AppColors.brand,
-                                bold: true),
-                          ],
-                        ),
+                    // Paid / Balance summary (always visible)
+                    SizedBox(height: context.h(12)),
+                    Container(
+                      padding: EdgeInsets.all(context.r(14)),
+                      decoration: BoxDecoration(
+                        color: AppColors.brand.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(context.r(12)),
+                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _priceStat(context, 'TOTAL',
+                              _selectedPass != null ? '₹${_effectivePrice.toStringAsFixed(0)}' : '—',
+                              context.fg),
+                          _priceStat(context, 'PAID',
+                              '₹${_paidAmount.toStringAsFixed(0)}', AppColors.brand),
+                          _priceStat(context, 'BALANCE',
+                              _selectedPass != null ? '₹${_balance.toStringAsFixed(0)}' : '—',
+                              _balance > 0 ? AppColors.energy : AppColors.brand,
+                              bold: true),
+                        ],
+                      ),
+                    ),
 
                     SizedBox(height: context.h(36)),
 
@@ -765,7 +924,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     required ValueChanged<T?> onChanged,
   }) {
     return DropdownButtonFormField<T>(
-      key: ValueKey(value),
+      key: ValueKey(label),
       initialValue: value,
       isExpanded: true,
       decoration: _fieldDecoration(label: label, hint: '', icon: icon),
