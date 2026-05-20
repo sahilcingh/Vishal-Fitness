@@ -23,11 +23,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   final _discountController = TextEditingController();
   final _paidController = TextEditingController();
   final _timeSlotController = TextEditingController();
+  final _notesController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
   DateTime _startDate = DateTime.now();
   bool _isPercent = false;
+  String _paymentMethod = 'Cash';
   XFile? _pickedImage;
   Uint8List? _imageBytes;
 
@@ -49,6 +51,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _discountController.dispose();
     _paidController.dispose();
     _timeSlotController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -247,8 +250,10 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
           'user_id': userId,
           'amount': _paidAmount,
           'payment_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-          'payment_method': 'cash',
-          'notes': 'Initial payment at enrollment',
+          'payment_method': _paymentMethod.toLowerCase(),
+          'notes': _notesController.text.trim().isEmpty
+              ? 'Initial payment at enrollment'
+              : _notesController.text.trim(),
         });
       }
 
@@ -480,11 +485,13 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _discountController.clear();
     _paidController.clear();
     _timeSlotController.clear();
+    _notesController.clear();
     setState(() {
       _selectedGender = null;
       _selectedPass = null;
       _startDate = DateTime.now();
       _isPercent = false;
+      _paymentMethod = 'Cash';
       _pickedImage = null;
       _imageBytes = null;
     });
@@ -768,6 +775,41 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       icon: Icons.payments_outlined,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => setState(() {}),
+                    ),
+                    SizedBox(height: context.h(12)),
+
+                    // Payment method + notes
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: const ValueKey('payment_method'),
+                            initialValue: _paymentMethod,
+                            isExpanded: true,
+                            decoration: _fieldDecoration(
+                              label: 'Payment Method',
+                              hint: '',
+                              icon: Icons.account_balance_wallet_outlined,
+                            ),
+                            dropdownColor: context.card,
+                            style: AppStyles.bodyFont.copyWith(
+                                color: context.fg, fontSize: context.sp(13)),
+                            items: ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque']
+                                .map((m) => DropdownMenuItem(
+                                    value: m,
+                                    child: Text(m, overflow: TextOverflow.ellipsis)))
+                                .toList(),
+                            onChanged: (v) => setState(() => _paymentMethod = v!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: context.h(12)),
+                    _buildField(
+                      controller: _notesController,
+                      label: 'Payment Note (optional)',
+                      hint: 'e.g. Paid by father',
+                      icon: Icons.note_outlined,
                     ),
 
                     // Paid / Balance summary (always visible)
