@@ -38,6 +38,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
             end_date,
             status,
             user_id,
+            discount_amount,
             profiles:user_id ( full_name, phone ),
             gym_passes:pass_id ( name, duration_days, price )
           ''')
@@ -75,14 +76,144 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
     }
   }
 
-  void _showPaymentsSheet(Map<String, dynamic> sub) {
+  void _showPaymentsSheet(Map<String, dynamic> sub, double discountAmount) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _PaymentsSheet(
         subscription: sub,
+        discountAmount: discountAmount,
         onPaymentRecorded: _fetchSubscriptions,
+      ),
+    );
+  }
+
+  Future<void> _setDiscount(String subscriptionId, double amount) async {
+    try {
+      await supabase.from('subscriptions').update({'discount_amount': amount}).eq('id', subscriptionId);
+      _fetchSubscriptions();
+    } catch (e) {
+      debugPrint('Error setting discount: $e');
+    }
+  }
+
+  void _showDiscountDialog(String subscriptionId, double passPrice, double currentDiscount) {
+    bool isPercent = false;
+    final controller = TextEditingController(
+      text: currentDiscount > 0 ? currentDiscount.toStringAsFixed(0) : '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor: context.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.r(20))),
+          title: Text(
+            'Set Discount',
+            style: AppStyles.displayFont.copyWith(
+              fontSize: context.sp(18),
+              fontWeight: FontWeight.bold,
+              color: context.fg,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setS(() => isPercent = false),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: context.h(10)),
+                        decoration: BoxDecoration(
+                          color: !isPercent ? AppColors.brand : Colors.transparent,
+                          borderRadius: BorderRadius.circular(context.r(8)),
+                          border: Border.all(color: !isPercent ? AppColors.brand : context.border),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '₹ Amount',
+                            style: AppStyles.bodyFont.copyWith(
+                              color: !isPercent ? Colors.white : context.fg,
+                              fontWeight: FontWeight.w600,
+                              fontSize: context.sp(13),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: context.w(8)),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setS(() => isPercent = true),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: context.h(10)),
+                        decoration: BoxDecoration(
+                          color: isPercent ? AppColors.brand : Colors.transparent,
+                          borderRadius: BorderRadius.circular(context.r(8)),
+                          border: Border.all(color: isPercent ? AppColors.brand : context.border),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '% Percent',
+                            style: AppStyles.bodyFont.copyWith(
+                              color: isPercent ? Colors.white : context.fg,
+                              fontWeight: FontWeight.w600,
+                              fontSize: context.sp(13),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: context.h(16)),
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: isPercent ? 'Discount %' : 'Discount Amount',
+                  prefixText: isPercent ? null : '₹ ',
+                  suffixText: isPercent ? '%' : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(context.r(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: TextStyle(color: context.mutedFg)),
+            ),
+            TextButton(
+              onPressed: () {
+                _setDiscount(subscriptionId, 0);
+                Navigator.pop(ctx);
+              },
+              child: Text('Remove', style: TextStyle(color: AppColors.energy)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final val = double.tryParse(controller.text.trim()) ?? 0;
+                final discountAmt = isPercent ? (passPrice * val / 100) : val;
+                _setDiscount(subscriptionId, discountAmt.clamp(0, passPrice));
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.r(8))),
+              ),
+              child: const Text('Apply', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -130,8 +261,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     final daysLeft = endDate.difference(DateTime.now()).inDays;
                     final isExpired = daysLeft < 0 || sub['status'] == 'expired';
                     final totalFee = (pass['price'] as num?)?.toDouble() ?? 0.0;
+                    final discountAmount = (sub['discount_amount'] as num?)?.toDouble() ?? 0.0;
+                    final effectivePrice = (totalFee - discountAmount).clamp(0.0, double.infinity);
                     final paid = _paidAmounts[id] ?? 0.0;
-                    final balance = totalFee - paid;
+                    final balance = effectivePrice - paid;
                     final name = profile['full_name'] as String? ?? 'Unknown';
                     final memberNo = _membershipNo(sub['user_id'] as String);
 
@@ -260,7 +393,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                       ),
                                       child: Row(
                                         children: [
-                                          _miniStat(context, 'PRICE', '₹${totalFee.toStringAsFixed(0)}', context.fg),
+                                          _miniStat(context, 'PRICE', '₹${effectivePrice.toStringAsFixed(0)}', context.fg),
                                           _vertDivider(context),
                                           _miniStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
                                           _vertDivider(context),
@@ -365,6 +498,27 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                   ),
                                                 ],
                                               ),
+                                              SizedBox(height: context.h(12)),
+                                              // Discount row
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  _detailCell(
+                                                    context,
+                                                    'DISCOUNT',
+                                                    discountAmount > 0
+                                                        ? '₹${discountAmount.toStringAsFixed(0)} off'
+                                                        : 'None',
+                                                    discountAmount > 0 ? AppColors.brand : context.mutedFg,
+                                                  ),
+                                                  TextButton.icon(
+                                                    onPressed: () => _showDiscountDialog(id, totalFee, discountAmount),
+                                                    icon: Icon(Icons.local_offer_outlined, size: context.r(14)),
+                                                    label: Text('Set', style: TextStyle(fontSize: context.sp(12))),
+                                                    style: TextButton.styleFrom(foregroundColor: AppColors.brand),
+                                                  ),
+                                                ],
+                                              ),
                                               SizedBox(height: context.h(14)),
                                               // Payment summary
                                               Container(
@@ -398,7 +552,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                                 ),
                                                               ),
                                                               Text(
-                                                                ' / ₹${totalFee.toStringAsFixed(0)}',
+                                                                ' / ₹${effectivePrice.toStringAsFixed(0)}',
                                                                 style: AppStyles.bodyFont.copyWith(
                                                                   fontSize: context.sp(13),
                                                                   color: context.mutedFg,
@@ -427,7 +581,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                       ),
                                                     ),
                                                     OutlinedButton.icon(
-                                                      onPressed: () => _showPaymentsSheet(sub),
+                                                      onPressed: () => _showPaymentsSheet(sub, discountAmount),
                                                       icon: Icon(
                                                         Icons.payments_outlined,
                                                         size: context.r(14),
@@ -579,10 +733,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
 
 class _PaymentsSheet extends StatefulWidget {
   final Map<String, dynamic> subscription;
+  final double discountAmount;
   final VoidCallback onPaymentRecorded;
 
   const _PaymentsSheet({
     required this.subscription,
+    required this.discountAmount,
     required this.onPaymentRecorded,
   });
 
@@ -692,7 +848,8 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
     final sub = widget.subscription;
     final pass = sub['gym_passes'] ?? {};
     final profile = sub['profiles'] ?? {};
-    final totalFee = (pass['price'] as num?)?.toDouble() ?? 0.0;
+    final passPrice = (pass['price'] as num?)?.toDouble() ?? 0.0;
+    final totalFee = (passPrice - widget.discountAmount).clamp(0.0, double.infinity);
     final totalPaid = _payments.fold(
       0.0,
       (sum, p) => sum + (p['amount'] as num).toDouble(),
