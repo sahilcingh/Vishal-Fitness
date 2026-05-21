@@ -33,6 +33,14 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    // Unregister any cached service workers so every deploy is seen immediately.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        registrations.forEach(function(reg) { reg.unregister(); });
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
