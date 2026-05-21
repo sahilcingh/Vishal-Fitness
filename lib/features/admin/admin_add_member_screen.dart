@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -56,41 +57,47 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   }
 
   Future<void> _pickImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: ctx.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(ctx.r(20))),
-        ),
-        padding: EdgeInsets.all(ctx.r(20)),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: ctx.w(40),
-                height: ctx.h(4),
-                decoration: BoxDecoration(color: ctx.border, borderRadius: BorderRadius.circular(2)),
-                margin: EdgeInsets.only(bottom: ctx.h(16)),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppColors.brand),
-                title: Text('Choose from Gallery', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: AppColors.brand),
-                title: Text('Take a Photo', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-            ],
+    ImageSource source;
+    if (kIsWeb) {
+      source = ImageSource.gallery;
+    } else {
+      final picked = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          decoration: BoxDecoration(
+            color: ctx.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(ctx.r(20))),
+          ),
+          padding: EdgeInsets.all(ctx.r(20)),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: ctx.w(40),
+                  height: ctx.h(4),
+                  decoration: BoxDecoration(color: ctx.border, borderRadius: BorderRadius.circular(2)),
+                  margin: EdgeInsets.only(bottom: ctx.h(16)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined, color: AppColors.brand),
+                  title: Text('Choose from Gallery', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined, color: AppColors.brand),
+                  title: Text('Take a Photo', style: AppStyles.bodyFont.copyWith(color: ctx.fg)),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-    if (source == null) return;
+      );
+      if (picked == null) return;
+      source = picked;
+    }
     try {
       final xfile = await ImagePicker().pickImage(source: source, imageQuality: 70, maxWidth: 512);
       if (xfile != null && mounted) {
@@ -271,7 +278,16 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
               .uploadBinary(storagePath, _imageBytes!, fileOptions: const FileOptions(upsert: true));
           profileUpdate['photo_url'] =
               supabase.storage.from('member-photos').getPublicUrl(storagePath);
-        } catch (_) {}
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Photo upload failed: $e'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+        }
       }
       if (profileUpdate.isNotEmpty) {
         await supabase.from('profiles').update(profileUpdate).eq('id', userId);
