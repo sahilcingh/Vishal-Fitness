@@ -19,7 +19,7 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --no-tree-shake-icons
+        run: flutter build web --release --no-tree-shake-icons --pwa-strategy=none
 
       - name: Deploy to Vercel
         env:
