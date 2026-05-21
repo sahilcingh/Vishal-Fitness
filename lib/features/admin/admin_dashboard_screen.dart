@@ -207,7 +207,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.energy),
+                          const SnackBar(
+                            content: Text('Check-in failed. Please try again.'),
+                            backgroundColor: Colors.redAccent,
+                          ),
                         );
                       }
                       setDialogState(() => isSubmitting = false);

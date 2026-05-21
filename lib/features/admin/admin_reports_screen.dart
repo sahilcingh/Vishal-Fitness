@@ -19,6 +19,54 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   String _stamp() => DateFormat('yyyyMMdd').format(DateTime.now());
 
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: AppStyles.displayFont.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ctx.fg,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Escapes a value for CSV output
   String _v(dynamic val) {
     final s = (val ?? '').toString();
@@ -44,9 +92,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       await exportCsv(csv, file);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-        );
+        _showErrorDialog('Export Failed', 'Could not export the report. Please check your connection and try again.');
       }
     } finally {
       if (mounted) setState(() => _loading.remove(id));
@@ -80,11 +126,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       csv = await fn();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-        );
+        _showErrorDialog('Report Failed', 'Could not load the report. Please check your connection and try again.');
+        setState(() => _loading.remove('view_$id'));
       }
-      if (mounted) setState(() => _loading.remove('view_$id'));
       return;
     }
     if (mounted) setState(() => _loading.remove('view_$id'));

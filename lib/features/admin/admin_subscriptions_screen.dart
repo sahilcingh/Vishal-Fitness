@@ -992,8 +992,54 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
       await _fetchPayments();
       widget.onPaymentRecorded();
     } catch (e) {
-      debugPrint('Error recording payment: $e');
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ctx.card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Payment Failed',
+                    style: AppStyles.displayFont.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: ctx.fg,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Could not record the payment. Please try again.',
+              style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
