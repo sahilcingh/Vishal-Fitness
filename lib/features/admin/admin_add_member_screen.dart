@@ -174,6 +174,247 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     if (picked != null) setState(() => _startDate = picked);
   }
 
+  Future<void> _addSubscriptionToExistingMember() async {
+    if (_selectedPass == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a pass type.'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      // Look up existing user by phone
+      final phone = _phoneController.text.trim();
+      final profile = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .eq('phone', phone)
+          .maybeSingle();
+
+      if (profile == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not find existing member. Please check the phone number.'), backgroundColor: Colors.redAccent),
+          );
+        }
+        return;
+      }
+
+      final userId = profile['id'] as String;
+
+      // Create new subscription
+      final subRes = await supabase.from('subscriptions').insert({
+        'user_id': userId,
+        'pass_id': _selectedPass!['id'],
+        'start_date': DateFormat('yyyy-MM-dd').format(_startDate),
+        'end_date': DateFormat('yyyy-MM-dd').format(_endDate),
+        'status': 'active',
+        'discount_amount': _discountAmount > 0 ? _discountAmount : 0,
+      }).select('id').single();
+
+      final subscriptionId = subRes['id'] as String;
+
+      // Record payment if any
+      if (_paidAmount > 0) {
+        await supabase.from('payments').insert({
+          'subscription_id': subscriptionId,
+          'user_id': userId,
+          'amount': _paidAmount,
+          'payment_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          'payment_method': _paymentMethod.toLowerCase(),
+          'notes': _notesController.text.trim().isEmpty
+              ? 'Payment at re-enrollment'
+              : _notesController.text.trim(),
+        });
+      }
+
+      // Upload photo + update profile extras if provided
+      final profileUpdate = <String, dynamic>{};
+      if (_timeSlotController.text.trim().isNotEmpty) {
+        profileUpdate['time_slot'] = _timeSlotController.text.trim();
+      }
+      if (_imageBytes != null && _pickedImage != null) {
+        try {
+          final ext = _pickedImage!.name.contains('.')
+              ? _pickedImage!.name.split('.').last.toLowerCase()
+              : 'jpg';
+          final storagePath = '$userId/avatar.$ext';
+          await supabase.storage
+              .from('member-photos')
+              .uploadBinary(storagePath, _imageBytes!, fileOptions: const FileOptions(upsert: true));
+          profileUpdate['photo_url'] =
+              supabase.storage.from('member-photos').getPublicUrl(storagePath);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Photo upload failed: $e'), backgroundColor: Colors.redAccent),
+            );
+          }
+        }
+      }
+      if (profileUpdate.isNotEmpty) {
+        await supabase.from('profiles').update(profileUpdate).eq('id', userId);
+      }
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ctx.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.brand.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: AppColors.brand, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Subscription Added!',
+                  style: AppStyles.displayFont.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: ctx.fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'A new subscription has been added for ${profile['full_name']}.',
+                style: AppStyles.bodyFont.copyWith(color: ctx.fg, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ctx.bg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _successStat(ctx, 'TOTAL', '₹${_effectivePrice.toStringAsFixed(0)}', ctx.fg),
+                    _successStat(ctx, 'PAID', '₹${_paidAmount.toStringAsFixed(0)}', AppColors.brand),
+                    _successStat(ctx, 'BALANCE', '₹${_balance.toStringAsFixed(0)}',
+                        _balance > 0 ? AppColors.energy : AppColors.brand),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.brand.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: AppColors.brand, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Member can log in with their existing credentials.',
+                        style: AppStyles.bodyFont.copyWith(
+                          color: AppColors.brand,
+                          fontSize: 11,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _resetForm();
+              },
+              child: Text('Add Another', style: TextStyle(color: ctx.mutedFg)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ctx.card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Something Went Wrong',
+                    style: AppStyles.displayFont.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: ctx.fg,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Could not add the subscription. Please try again.',
+              style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedPass == null) {
@@ -236,10 +477,10 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.15),
+                      color: AppColors.sun.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_off_outlined, color: Colors.redAccent, size: 20),
+                    child: const Icon(Icons.person_outlined, color: AppColors.sun, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -255,18 +496,25 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                 ],
               ),
               content: Text(
-                'A member with this phone number or email is already registered. Use the Edit Member option to update their details.',
+                'This member already has an account. Would you like to add a new membership subscription to their existing account?\n\nThey will keep their current login credentials.',
                 style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
               ),
               actions: [
-                ElevatedButton(
+                TextButton(
                   onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancel', style: TextStyle(color: ctx.mutedFg)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _addSubscriptionToExistingMember();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brand,
                     foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('OK'),
+                  child: const Text('Add Subscription'),
                 ),
               ],
             ),
