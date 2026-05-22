@@ -34,6 +34,7 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _timeSlotController = TextEditingController();
+  final _extraDaysController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
@@ -61,6 +62,7 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _timeSlotController.dispose();
+    _extraDaysController.dispose();
     super.dispose();
   }
 
@@ -127,9 +129,11 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
     }
   }
 
+  int get _extraDays => int.tryParse(_extraDaysController.text.trim()) ?? 0;
+
   DateTime get _endDate {
     if (_selectedPass == null) return _startDate;
-    return _startDate.add(Duration(days: _selectedPass!['duration_days'] as int));
+    return _startDate.add(Duration(days: (_selectedPass!['duration_days'] as int) + _extraDays));
   }
 
   Future<void> _pickImage() async {
@@ -455,12 +459,71 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
                     ),
                     if (_selectedPass != null) ...[
                       SizedBox(height: context.h(12)),
-                      _buildInfoTile(
-                        label: 'End Date (auto-calculated)',
-                        value: fmt.format(_endDate),
-                        icon: Icons.event_available_outlined,
-                        valueColor: AppColors.brand,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInfoTile(
+                              label: 'End Date (auto-calculated)',
+                              value: fmt.format(_endDate),
+                              icon: Icons.event_available_outlined,
+                              valueColor: _extraDays > 0 ? AppColors.brand : AppColors.brand,
+                            ),
+                          ),
+                          SizedBox(width: context.w(10)),
+                          SizedBox(
+                            width: context.w(110),
+                            child: TextFormField(
+                              controller: _extraDaysController,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              onChanged: (_) => setState(() {}),
+                              style: AppStyles.bodyFont.copyWith(
+                                  color: context.fg, fontSize: context.sp(14)),
+                              decoration: InputDecoration(
+                                labelText: 'Extra Days',
+                                hintText: '0',
+                                hintStyle: AppStyles.bodyFont.copyWith(
+                                    color: context.mutedFg, fontSize: context.sp(12)),
+                                labelStyle: AppStyles.bodyFont.copyWith(
+                                    color: context.mutedFg, fontSize: context.sp(12)),
+                                prefixIcon: Icon(Icons.add_circle_outline,
+                                    color: context.mutedFg, size: context.r(16)),
+                                filled: true,
+                                fillColor: context.card,
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: context.w(10), vertical: context.h(14)),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(context.r(12)),
+                                    borderSide: BorderSide(color: context.border)),
+                                enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(context.r(12)),
+                                    borderSide: BorderSide(
+                                        color: context.border.withValues(alpha: 0.6))),
+                                focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(context.r(12)),
+                                    borderSide: const BorderSide(
+                                        color: AppColors.brand, width: 1.5)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (_extraDays > 0) ...[
+                        SizedBox(height: context.h(8)),
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                size: context.r(13), color: AppColors.brand),
+                            SizedBox(width: context.w(6)),
+                            Text(
+                              '+$_extraDays extra days added to membership',
+                              style: AppStyles.bodyFont.copyWith(
+                                  color: AppColors.brand,
+                                  fontSize: context.sp(12)),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
 
                     SizedBox(height: context.h(36)),
