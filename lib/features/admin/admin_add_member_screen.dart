@@ -174,6 +174,61 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     if (picked != null) setState(() => _startDate = picked);
   }
 
+  void _showMemberAlreadyExistsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.sun.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.person_outlined, color: AppColors.sun, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Member Already Exists',
+                style: AppStyles.displayFont.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ctx.fg,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'This member already has an account. Would you like to add a new membership subscription to their existing account?\n\nThey will keep their current login credentials.',
+          style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: ctx.mutedFg)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _addSubscriptionToExistingMember();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Add Subscription'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _addSubscriptionToExistingMember() async {
     if (_selectedPass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -467,58 +522,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
         if (!mounted) return;
         if (msg.toLowerCase().contains('already been registered') ||
             msg.toLowerCase().contains('already registered')) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: ctx.card,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.sun.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.person_outlined, color: AppColors.sun, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Member Already Exists',
-                      style: AppStyles.displayFont.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: ctx.fg,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              content: Text(
-                'This member already has an account. Would you like to add a new membership subscription to their existing account?\n\nThey will keep their current login credentials.',
-                style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancel', style: TextStyle(color: ctx.mutedFg)),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _addSubscriptionToExistingMember();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.brand,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Add Subscription'),
-                ),
-              ],
-            ),
-          );
+          _showMemberAlreadyExistsDialog();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $msg'), backgroundColor: Colors.redAccent),
@@ -602,51 +606,56 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       );
     } catch (e) {
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: ctx.card,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('already been registered') || errStr.contains('already registered')) {
+          _showMemberAlreadyExistsDialog();
+        } else {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: ctx.card,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
                   ),
-                  child: const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Something Went Wrong',
-                    style: AppStyles.displayFont.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: ctx.fg,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Something Went Wrong',
+                      style: AppStyles.displayFont.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: ctx.fg,
+                      ),
                     ),
                   ),
+                ],
+              ),
+              content: Text(
+                'Could not add the member. Please check your connection and try again.',
+                style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('OK'),
                 ),
               ],
             ),
-            content: Text(
-              'Could not add the member. Please check your connection and try again.',
-              style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brand,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
