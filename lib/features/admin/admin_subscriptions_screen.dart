@@ -406,7 +406,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Expanded(flex: 3, child: const SizedBox()),
+                                  Expanded(flex: 2, child: const SizedBox()),
                                   Expanded(flex: 1, child: Text('TOTAL', textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
                                   Expanded(flex: 1, child: Text('DISC',  textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
                                   Expanded(flex: 1, child: Text('PAID',  textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
@@ -792,7 +792,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
         SizedBox(width: context.w(8)),
         // Name + MBR + phone
         Expanded(
-          flex: 3,
+          flex: 2,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -1941,4 +1941,5 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
     );
   }
 }
+
 
