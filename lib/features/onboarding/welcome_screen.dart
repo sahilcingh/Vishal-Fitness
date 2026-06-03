@@ -55,10 +55,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           .select()
           .eq('is_active', true)
           .order('duration_days', ascending: true);
+      debugPrint('🎟️ Active passes fetched (${(res as List).length}): '
+          '${res.map((p) => p['name']).join(', ')}');
       if (mounted) {
         setState(() => _passes = List<Map<String, dynamic>>.from(res));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('❌ _fetchPasses error: $e');
+    }
   }
 
   @override
@@ -1023,18 +1027,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _buildWidePassGrid(BuildContext context, NumberFormat fmt) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: _passes.asMap().entries.map((entry) {
-        final i = entry.key;
-        final pass = entry.value;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: i < _passes.length - 1 ? 16 : 0),
-            child: _buildPassCard(context, pass, i, fmt),
-          ),
+    // Use LayoutBuilder so all passes always fit the available width exactly
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = _passes.length;
+        final totalGaps = (count - 1) * 16.0;
+        final cardWidth = (constraints.maxWidth - totalGaps) / count;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _passes.asMap().entries.map((entry) {
+            final i = entry.key;
+            return SizedBox(
+              width: cardWidth,
+              child: Padding(
+                padding: EdgeInsets.only(right: i < count - 1 ? 16 : 0),
+                child: _buildPassCard(context, _passes[i], i, fmt),
+              ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 

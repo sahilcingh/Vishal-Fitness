@@ -454,17 +454,18 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                             Padding(
                               padding: EdgeInsets.symmetric(
                                 horizontal: context.w(14),
-                                vertical: context.h(12),
+                                vertical: context.h(8),
                               ),
                               child: Column(
                                 children: [
-                                  // Row 1: Avatar + Name/Phone + Status/Chevron
+                                  // Single row: Avatar | Name/MBR (Expanded) | TOTAL·DISC·PAID·BAL | Pass+Status
                                   Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      // Avatar (photo or initials)
+                                      // Avatar
                                       Container(
-                                        width: context.r(38),
-                                        height: context.r(38),
+                                        width: context.r(32),
+                                        height: context.r(32),
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: (isExpired ? AppColors.energy : AppColors.brand)
@@ -472,8 +473,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                           image: photoUrl != null
                                               ? DecorationImage(
                                                   image: NetworkImage(photoUrl),
-                                                  fit: BoxFit.cover,
-                                                )
+                                                  fit: BoxFit.cover)
                                               : null,
                                         ),
                                         child: photoUrl == null
@@ -481,7 +481,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                 child: Text(
                                                   _initials(name),
                                                   style: AppStyles.displayFont.copyWith(
-                                                    fontSize: context.sp(13),
+                                                    fontSize: context.sp(11),
                                                     fontWeight: FontWeight.bold,
                                                     color: isExpired ? AppColors.energy : AppColors.brand,
                                                   ),
@@ -489,18 +489,21 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                               )
                                             : null,
                                       ),
-                                      SizedBox(width: context.w(10)),
-                                      // Name + MBR + phone
+                                      SizedBox(width: context.w(8)),
+
+                                      // Name + MBR + phone (Expanded — takes remaining after fixed columns)
                                       Expanded(
+                                        flex: 3,
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
                                               name,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: AppStyles.displayFont.copyWith(
-                                                fontSize: context.sp(13),
+                                                fontSize: context.sp(12),
                                                 fontWeight: FontWeight.bold,
                                                 color: context.fg,
                                               ),
@@ -510,21 +513,17 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                               children: [
                                                 Container(
                                                   padding: EdgeInsets.symmetric(
-                                                    horizontal: context.w(5),
-                                                    vertical: context.h(1),
-                                                  ),
+                                                      horizontal: context.w(5),
+                                                      vertical: context.h(1)),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.brand.withValues(alpha: 0.08),
                                                     borderRadius: BorderRadius.circular(context.r(4)),
                                                   ),
-                                                  child: Text(
-                                                    memberNo,
-                                                    style: AppStyles.eyebrow.copyWith(
-                                                      fontSize: context.sp(8),
-                                                      color: AppColors.brand,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
+                                                  child: Text(memberNo,
+                                                      style: AppStyles.eyebrow.copyWith(
+                                                          fontSize: context.sp(8),
+                                                          color: AppColors.brand,
+                                                          fontWeight: FontWeight.bold)),
                                                 ),
                                                 SizedBox(width: context.w(5)),
                                                 Flexible(
@@ -533,109 +532,114 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                     style: AppStyles.bodyFont.copyWith(
-                                                      fontSize: context.sp(10),
-                                                      color: context.mutedFg,
-                                                    ),
+                                                        fontSize: context.sp(10),
+                                                        color: context.mutedFg),
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            // Pass type pill
-                                            if ((pass['name'] as String?) != null) ...[
-                                              SizedBox(height: context.h(4)),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: context.w(6),
-                                                  vertical: context.h(2),
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: (isExpired
-                                                          ? AppColors.energy
-                                                          : AppColors.aqua)
-                                                      .withValues(alpha: 0.10),
-                                                  borderRadius: BorderRadius.circular(context.r(5)),
-                                                  border: Border.all(
-                                                    color: (isExpired
-                                                            ? AppColors.energy
-                                                            : AppColors.aqua)
-                                                        .withValues(alpha: 0.25),
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  pass['name'] as String,
-                                                  style: AppStyles.eyebrow.copyWith(
-                                                    fontSize: context.sp(8),
-                                                    fontWeight: FontWeight.w800,
-                                                    color: isExpired
-                                                        ? AppColors.energy
-                                                        : AppColors.aqua,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
                                           ],
                                         ),
                                       ),
+
+                                      // Financial stats — each Expanded(flex:1) so columns are
+                                      // always equal width and align perfectly across every row
+                                      Expanded(
+                                        flex: 1,
+                                        child: _alignedStat(context, 'TOTAL',
+                                            '₹${effectivePrice.toStringAsFixed(0)}',
+                                            context.fg),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: _alignedStat(context, 'DISC',
+                                            discountAmount > 0
+                                                ? '₹${discountAmount.toStringAsFixed(0)}'
+                                                : '—',
+                                            discountAmount > 0
+                                                ? AppColors.sun
+                                                : context.mutedFg),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: _alignedStat(context, 'PAID',
+                                            '₹${paid.toStringAsFixed(0)}',
+                                            AppColors.brand),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: _alignedStat(context, 'BAL',
+                                            '₹${balance.toStringAsFixed(0)}',
+                                            balance > 0 ? AppColors.energy : AppColors.brand),
+                                      ),
+
                                       SizedBox(width: context.w(8)),
-                                      // Status + chevron
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: context.w(7),
-                                              vertical: context.h(3),
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isExpired
-                                                  ? AppColors.energy.withValues(alpha: 0.1)
-                                                  : AppColors.brand.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(context.r(6)),
-                                            ),
-                                            child: Text(
-                                              sub['status'].toString().toUpperCase(),
-                                              style: AppStyles.eyebrow.copyWith(
-                                                color: isExpired ? AppColors.energy : AppColors.brand,
-                                                fontSize: context.sp(9),
+
+                                      // Pass pill + Status + chevron — fixed width so center stats
+                                      // always span the same width across all rows
+                                      SizedBox(
+                                        width: context.w(110),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if ((pass['name'] as String?) != null)
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: context.w(6),
+                                                    vertical: context.h(2)),
+                                                decoration: BoxDecoration(
+                                                  color: (isExpired ? AppColors.energy : AppColors.aqua)
+                                                      .withValues(alpha: 0.10),
+                                                  borderRadius: BorderRadius.circular(context.r(5)),
+                                                  border: Border.all(
+                                                      color: (isExpired ? AppColors.energy : AppColors.aqua)
+                                                          .withValues(alpha: 0.25)),
+                                                ),
+                                                child: Text(
+                                                  pass['name'] as String,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: AppStyles.eyebrow.copyWith(
+                                                      fontSize: context.sp(8),
+                                                      fontWeight: FontWeight.w800,
+                                                      color: isExpired ? AppColors.energy : AppColors.aqua),
+                                                ),
                                               ),
+                                            SizedBox(height: context.h(3)),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: context.w(7),
+                                                      vertical: context.h(3)),
+                                                  decoration: BoxDecoration(
+                                                    color: isExpired
+                                                        ? AppColors.energy.withValues(alpha: 0.1)
+                                                        : AppColors.brand.withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(context.r(6)),
+                                                  ),
+                                                  child: Text(
+                                                    sub['status'].toString().toUpperCase(),
+                                                    style: AppStyles.eyebrow.copyWith(
+                                                        color: isExpired ? AppColors.energy : AppColors.brand,
+                                                        fontSize: context.sp(9)),
+                                                  ),
+                                                ),
+                                                SizedBox(width: context.w(4)),
+                                                AnimatedRotation(
+                                                  turns: isExpanded ? 0.5 : 0,
+                                                  duration: const Duration(milliseconds: 200),
+                                                  child: Icon(Icons.keyboard_arrow_down,
+                                                      size: context.r(16), color: context.mutedFg),
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                          SizedBox(height: context.h(4)),
-                                          AnimatedRotation(
-                                            turns: isExpanded ? 0.5 : 0,
-                                            duration: const Duration(milliseconds: 200),
-                                            child: Icon(
-                                              Icons.keyboard_arrow_down,
-                                              size: context.r(18),
-                                              color: context.mutedFg,
-                                            ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ],
-                                  ),
-                                  SizedBox(height: context.h(8)),
-                                  // Row 2: Full-width financial strip (4 cols)
-                                  Container(
-                                    padding: EdgeInsets.symmetric(vertical: context.h(6)),
-                                    decoration: BoxDecoration(
-                                      color: context.bg,
-                                      borderRadius: BorderRadius.circular(context.r(8)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        _miniStat(context, 'TOTAL', '₹${effectivePrice.toStringAsFixed(0)}', context.fg),
-                                        _vertDivider(context),
-                                        _miniStat(context, 'DISC',
-                                            discountAmount > 0 ? '₹${discountAmount.toStringAsFixed(0)}' : '—',
-                                            discountAmount > 0 ? AppColors.sun : context.mutedFg),
-                                        _vertDivider(context),
-                                        _miniStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
-                                        _vertDivider(context),
-                                        _miniStat(context, 'BAL', '₹${balance.toStringAsFixed(0)}',
-                                            balance > 0 ? AppColors.energy : AppColors.brand),
-                                      ],
-                                    ),
                                   ),
                                 ],
                               ),
@@ -962,6 +966,115 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
     );
   }
 
+  Widget _alignedStat(BuildContext context, String label, String value, Color valueColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: AppStyles.eyebrow.copyWith(
+            color: context.mutedFg,
+            fontSize: context.sp(7),
+          ),
+        ),
+        SizedBox(height: context.h(2)),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: AppStyles.numTabular.copyWith(
+            fontSize: context.sp(13),
+            fontWeight: FontWeight.w800,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _centerStat(BuildContext context, String label, String value, Color valueColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: AppStyles.eyebrow.copyWith(
+            color: context.mutedFg,
+            fontSize: context.sp(7),
+          ),
+        ),
+        SizedBox(height: context.h(1)),
+        Text(
+          value,
+          style: AppStyles.numTabular.copyWith(
+            fontSize: context.sp(13),
+            fontWeight: FontWeight.w800,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _spreadStat(BuildContext context, String label, String value, Color valueColor) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: AppStyles.eyebrow.copyWith(
+              color: context.mutedFg,
+              fontSize: context.sp(7),
+            ),
+          ),
+          SizedBox(height: context.h(1)),
+          Text(
+            value,
+            style: AppStyles.displayFont.copyWith(
+              fontSize: context.sp(12),
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineStat(BuildContext context, String value, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: AppStyles.numTabular.copyWith(
+            fontSize: context.sp(10),
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        SizedBox(width: context.w(2)),
+        Text(
+          label,
+          style: AppStyles.eyebrow.copyWith(
+            fontSize: context.sp(8),
+            color: context.mutedFg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dot(BuildContext context) => Padding(
+        padding: EdgeInsets.symmetric(horizontal: context.w(5)),
+        child: Text('·',
+            style: TextStyle(
+                color: context.mutedFg.withValues(alpha: 0.4),
+                fontSize: context.sp(10))),
+      );
+
   Widget _miniStat(BuildContext context, String label, String value, Color valueColor) {
     return Expanded(
       child: Column(
@@ -970,14 +1083,14 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
             label,
             style: AppStyles.eyebrow.copyWith(
               color: context.mutedFg,
-              fontSize: context.sp(8),
+              fontSize: context.sp(7),
             ),
           ),
-          SizedBox(height: context.h(2)),
+          SizedBox(height: context.h(1)),
           Text(
             value,
             style: AppStyles.displayFont.copyWith(
-              fontSize: context.sp(13),
+              fontSize: context.sp(12),
               fontWeight: FontWeight.bold,
               color: valueColor,
             ),
@@ -1237,6 +1350,8 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
       (sum, p) => sum + (p['amount'] as num).toDouble(),
     );
     final balance = totalFee - totalPaid;
+    final enteredAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final isOverpay = enteredAmount > 0 && enteredAmount > balance;
 
     return Container(
       decoration: BoxDecoration(
@@ -1354,17 +1469,77 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
                           ),
                         ),
                         SizedBox(height: context.h(12)),
+                        // Quick-fill hint
+                        if (balance > 0)
+                          Padding(
+                            padding: EdgeInsets.only(bottom: context.h(8)),
+                            child: Row(
+                              children: [
+                                Icon(Icons.info_outline,
+                                    size: context.r(12), color: context.mutedFg),
+                                SizedBox(width: context.w(4)),
+                                Text(
+                                  'Remaining balance: ₹${balance.toStringAsFixed(0)}',
+                                  style: AppStyles.eyebrow.copyWith(
+                                      color: context.mutedFg, fontSize: context.sp(9)),
+                                ),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () => setState(() =>
+                                      _amountController.text =
+                                          balance.toStringAsFixed(0)),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: context.w(8),
+                                        vertical: context.h(3)),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.brand.withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(context.r(6)),
+                                      border: Border.all(
+                                          color: AppColors.brand.withValues(alpha: 0.3)),
+                                    ),
+                                    child: Text(
+                                      'Fill ₹${balance.toStringAsFixed(0)}',
+                                      style: AppStyles.eyebrow.copyWith(
+                                          color: AppColors.brand,
+                                          fontSize: context.sp(9),
+                                          fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         Row(
                           children: [
                             Expanded(
                               child: TextField(
                                 controller: _amountController,
                                 keyboardType: TextInputType.number,
+                                onChanged: (_) => setState(() {}),
                                 decoration: InputDecoration(
                                   labelText: 'Amount (₹)',
                                   prefixText: '₹ ',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(context.r(8)),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(context.r(8)),
+                                    borderSide: BorderSide(
+                                      color: isOverpay
+                                          ? AppColors.energy
+                                          : context.border,
+                                      width: isOverpay ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(context.r(8)),
+                                    borderSide: BorderSide(
+                                      color: isOverpay
+                                          ? AppColors.energy
+                                          : AppColors.brand,
+                                      width: 1.5,
+                                    ),
                                   ),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: context.w(12),
@@ -1396,6 +1571,37 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
                             ),
                           ],
                         ),
+                        // Overpay warning banner
+                        if (isOverpay) ...[
+                          SizedBox(height: context.h(8)),
+                          Container(
+                            padding: EdgeInsets.all(context.r(10)),
+                            decoration: BoxDecoration(
+                              color: AppColors.energy.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(context.r(8)),
+                              border: Border.all(
+                                  color: AppColors.energy.withValues(alpha: 0.35)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    color: AppColors.energy, size: context.r(15)),
+                                SizedBox(width: context.w(8)),
+                                Expanded(
+                                  child: Text(
+                                    '₹${enteredAmount.toStringAsFixed(0)} exceeds the remaining balance of ₹${balance.toStringAsFixed(0)}. Please enter a correct amount.',
+                                    style: AppStyles.bodyFont.copyWith(
+                                      color: AppColors.energy,
+                                      fontSize: context.sp(11),
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         SizedBox(height: context.h(12)),
                         GestureDetector(
                           onTap: () async {
