@@ -396,7 +396,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                       : Column(
                           children: [
                             // ── Table column headers (wide screens only) ──
-                            if (MediaQuery.of(context).size.width > 600)
+                            if (MediaQuery.of(context).size.width > 900)
                             Padding(
                               padding: EdgeInsets.fromLTRB(
                                 context.w(AppStyles.containerPadding + 14 + 32 + 8),
@@ -478,7 +478,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                 horizontal: context.w(14),
                                 vertical: context.h(8),
                               ),
-                              child: MediaQuery.of(context).size.width > 600
+                              child: MediaQuery.of(context).size.width > 900
                                   ? _buildWideCardRow(context, name, memberNo, profile, pass, sub, effectivePrice, discountAmount, paid, balance, isExpired, isExpanded)
                                   : _buildMobileCardRow(context, name, memberNo, profile, pass, sub, effectivePrice, discountAmount, paid, balance, isExpired, isExpanded),
                             ),
@@ -1941,3 +1941,4 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
     );
   }
 }
+
