@@ -393,10 +393,32 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                 AppStyles.bodyFont.copyWith(color: context.mutedFg),
                           ),
                         )
-                      : ListView.builder(
+                      : Column(
+                          children: [
+                            // ── Table column headers ──────────────────────
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                context.w(AppStyles.containerPadding + 14 + 32 + 8),
+                                context.h(6),
+                                context.w(AppStyles.containerPadding + 14 + 110 + 8),
+                                context.h(4),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(flex: 3, child: const SizedBox()),
+                                  Expanded(flex: 1, child: Text('TOTAL', textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
+                                  Expanded(flex: 1, child: Text('DISC',  textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
+                                  Expanded(flex: 1, child: Text('PAID',  textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
+                                  Expanded(flex: 1, child: Text('BAL',   textAlign: TextAlign.center, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(8)))),
+                                ],
+                              ),
+                            ),
+                            // ── Data rows ────────────────────────────────
+                            Expanded(
+                              child: ListView.builder(
                           padding: EdgeInsets.fromLTRB(
                             context.w(AppStyles.containerPadding),
-                            context.h(4),
+                            context.h(2),
                             context.w(AppStyles.containerPadding),
                             context.h(120),
                           ),
@@ -899,9 +921,12 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     );
                           },
                         ),
-                  ),
-                ],
-              ),
+                      ),   // Expanded(child: ListView)
+                    ],
+                  ), // Column(header + list)
+              ),   // outer Expanded
+            ],
+          ),
     );
   }
 
@@ -967,29 +992,14 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
   }
 
   Widget _alignedStat(BuildContext context, String label, String value, Color valueColor) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: AppStyles.eyebrow.copyWith(
-            color: context.mutedFg,
-            fontSize: context.sp(7),
-          ),
-        ),
-        SizedBox(height: context.h(2)),
-        Text(
-          value,
-          textAlign: TextAlign.center,
-          style: AppStyles.numTabular.copyWith(
-            fontSize: context.sp(13),
-            fontWeight: FontWeight.w800,
-            color: valueColor,
-          ),
-        ),
-      ],
+    return Text(
+      value,
+      textAlign: TextAlign.center,
+      style: AppStyles.numTabular.copyWith(
+        fontSize: context.sp(13),
+        fontWeight: FontWeight.w800,
+        color: valueColor,
+      ),
     );
   }
 
