@@ -395,7 +395,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                         )
                       : Column(
                           children: [
-                            // ── Table column headers ──────────────────────
+                            // ── Table column headers (wide screens only) ──
+                            if (MediaQuery.of(context).size.width > 600)
                             Padding(
                               padding: EdgeInsets.fromLTRB(
                                 context.w(AppStyles.containerPadding + 14 + 32 + 8),
@@ -440,7 +441,6 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     final balance = effectivePrice - paid;
                     final name = profile['full_name'] as String? ?? 'Unknown';
                     final memberNo = _membershipNo(sub['user_id'] as String);
-                    final photoUrl = profile['photo_url'] as String?;
                     final timeSlot = profile['time_slot'] as String?;
                     final passId = sub['pass_id'] as String?;
 
@@ -478,193 +478,9 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                 horizontal: context.w(14),
                                 vertical: context.h(8),
                               ),
-                              child: Column(
-                                children: [
-                                  // Single row: Avatar | Name/MBR (Expanded) | TOTAL·DISC·PAID·BAL | Pass+Status
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      // Avatar
-                                      Container(
-                                        width: context.r(32),
-                                        height: context.r(32),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: (isExpired ? AppColors.energy : AppColors.brand)
-                                              .withValues(alpha: 0.12),
-                                          image: photoUrl != null
-                                              ? DecorationImage(
-                                                  image: NetworkImage(photoUrl),
-                                                  fit: BoxFit.cover)
-                                              : null,
-                                        ),
-                                        child: photoUrl == null
-                                            ? Center(
-                                                child: Text(
-                                                  _initials(name),
-                                                  style: AppStyles.displayFont.copyWith(
-                                                    fontSize: context.sp(11),
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isExpired ? AppColors.energy : AppColors.brand,
-                                                  ),
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                      SizedBox(width: context.w(8)),
-
-                                      // Name + MBR + phone (Expanded — takes remaining after fixed columns)
-                                      Expanded(
-                                        flex: 3,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              name,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppStyles.displayFont.copyWith(
-                                                fontSize: context.sp(12),
-                                                fontWeight: FontWeight.bold,
-                                                color: context.fg,
-                                              ),
-                                            ),
-                                            SizedBox(height: context.h(2)),
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                      horizontal: context.w(5),
-                                                      vertical: context.h(1)),
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors.brand.withValues(alpha: 0.08),
-                                                    borderRadius: BorderRadius.circular(context.r(4)),
-                                                  ),
-                                                  child: Text(memberNo,
-                                                      style: AppStyles.eyebrow.copyWith(
-                                                          fontSize: context.sp(8),
-                                                          color: AppColors.brand,
-                                                          fontWeight: FontWeight.bold)),
-                                                ),
-                                                SizedBox(width: context.w(5)),
-                                                Flexible(
-                                                  child: Text(
-                                                    profile['phone'] ?? '',
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: AppStyles.bodyFont.copyWith(
-                                                        fontSize: context.sp(10),
-                                                        color: context.mutedFg),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      // Financial stats — each Expanded(flex:1) so columns are
-                                      // always equal width and align perfectly across every row
-                                      Expanded(
-                                        flex: 1,
-                                        child: _alignedStat(context, 'TOTAL',
-                                            '₹${effectivePrice.toStringAsFixed(0)}',
-                                            context.fg),
-                                      ),
-                                      Expanded(
-                                        flex: 1,
-                                        child: _alignedStat(context, 'DISC',
-                                            discountAmount > 0
-                                                ? '₹${discountAmount.toStringAsFixed(0)}'
-                                                : '—',
-                                            discountAmount > 0
-                                                ? AppColors.sun
-                                                : context.mutedFg),
-                                      ),
-                                      Expanded(
-                                        flex: 1,
-                                        child: _alignedStat(context, 'PAID',
-                                            '₹${paid.toStringAsFixed(0)}',
-                                            AppColors.brand),
-                                      ),
-                                      Expanded(
-                                        flex: 1,
-                                        child: _alignedStat(context, 'BAL',
-                                            '₹${balance.toStringAsFixed(0)}',
-                                            balance > 0 ? AppColors.energy : AppColors.brand),
-                                      ),
-
-                                      SizedBox(width: context.w(8)),
-
-                                      // Pass pill + Status + chevron — fixed width so center stats
-                                      // always span the same width across all rows
-                                      SizedBox(
-                                        width: context.w(110),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if ((pass['name'] as String?) != null)
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: context.w(6),
-                                                    vertical: context.h(2)),
-                                                decoration: BoxDecoration(
-                                                  color: (isExpired ? AppColors.energy : AppColors.aqua)
-                                                      .withValues(alpha: 0.10),
-                                                  borderRadius: BorderRadius.circular(context.r(5)),
-                                                  border: Border.all(
-                                                      color: (isExpired ? AppColors.energy : AppColors.aqua)
-                                                          .withValues(alpha: 0.25)),
-                                                ),
-                                                child: Text(
-                                                  pass['name'] as String,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: AppStyles.eyebrow.copyWith(
-                                                      fontSize: context.sp(8),
-                                                      fontWeight: FontWeight.w800,
-                                                      color: isExpired ? AppColors.energy : AppColors.aqua),
-                                                ),
-                                              ),
-                                            SizedBox(height: context.h(3)),
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.end,
-                                              children: [
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                      horizontal: context.w(7),
-                                                      vertical: context.h(3)),
-                                                  decoration: BoxDecoration(
-                                                    color: isExpired
-                                                        ? AppColors.energy.withValues(alpha: 0.1)
-                                                        : AppColors.brand.withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(context.r(6)),
-                                                  ),
-                                                  child: Text(
-                                                    sub['status'].toString().toUpperCase(),
-                                                    style: AppStyles.eyebrow.copyWith(
-                                                        color: isExpired ? AppColors.energy : AppColors.brand,
-                                                        fontSize: context.sp(9)),
-                                                  ),
-                                                ),
-                                                SizedBox(width: context.w(4)),
-                                                AnimatedRotation(
-                                                  turns: isExpanded ? 0.5 : 0,
-                                                  duration: const Duration(milliseconds: 200),
-                                                  child: Icon(Icons.keyboard_arrow_down,
-                                                      size: context.r(16), color: context.mutedFg),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                              child: MediaQuery.of(context).size.width > 600
+                                  ? _buildWideCardRow(context, name, memberNo, profile, pass, sub, effectivePrice, discountAmount, paid, balance, isExpired, isExpanded)
+                                  : _buildMobileCardRow(context, name, memberNo, profile, pass, sub, effectivePrice, discountAmount, paid, balance, isExpired, isExpanded),
                             ),
 
                             // ── Expandable details ──
@@ -927,6 +743,294 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
               ),   // outer Expanded
             ],
           ),
+    );
+  }
+
+  // ── Wide (>600px): single table row ────────────────────────────────────────
+  Widget _buildWideCardRow(
+    BuildContext context,
+    String name,
+    String memberNo,
+    Map profile,
+    Map pass,
+    Map<String, dynamic> sub,
+    double effectivePrice,
+    double discountAmount,
+    double paid,
+    double balance,
+    bool isExpired,
+    bool isExpanded,
+  ) {
+    final photoUrl = profile['photo_url'] as String?;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Avatar
+        Container(
+          width: context.r(32),
+          height: context.r(32),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: (isExpired ? AppColors.energy : AppColors.brand).withValues(alpha: 0.12),
+            image: photoUrl != null
+                ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                : null,
+          ),
+          child: photoUrl == null
+              ? Center(
+                  child: Text(
+                    _initials(name),
+                    style: AppStyles.displayFont.copyWith(
+                      fontSize: context.sp(11),
+                      fontWeight: FontWeight.bold,
+                      color: isExpired ? AppColors.energy : AppColors.brand,
+                    ),
+                  ),
+                )
+              : null,
+        ),
+        SizedBox(width: context.w(8)),
+        // Name + MBR + phone
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppStyles.displayFont.copyWith(
+                      fontSize: context.sp(12),
+                      fontWeight: FontWeight.bold,
+                      color: context.fg)),
+              SizedBox(height: context.h(2)),
+              Row(children: [
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: context.w(5), vertical: context.h(1)),
+                  decoration: BoxDecoration(
+                      color: AppColors.brand.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(context.r(4))),
+                  child: Text(memberNo,
+                      style: AppStyles.eyebrow.copyWith(
+                          fontSize: context.sp(8), color: AppColors.brand, fontWeight: FontWeight.bold)),
+                ),
+                SizedBox(width: context.w(5)),
+                Flexible(
+                    child: Text(profile['phone'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.bodyFont.copyWith(fontSize: context.sp(10), color: context.mutedFg))),
+              ]),
+            ],
+          ),
+        ),
+        // Financial stats — equal flex so they align with header columns
+        Expanded(flex: 1, child: _alignedStat(context, 'TOTAL', '₹${effectivePrice.toStringAsFixed(0)}', context.fg)),
+        Expanded(flex: 1, child: _alignedStat(context, 'DISC', discountAmount > 0 ? '₹${discountAmount.toStringAsFixed(0)}' : '—', discountAmount > 0 ? AppColors.sun : context.mutedFg)),
+        Expanded(flex: 1, child: _alignedStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand)),
+        Expanded(flex: 1, child: _alignedStat(context, 'BAL', '₹${balance.toStringAsFixed(0)}', balance > 0 ? AppColors.energy : AppColors.brand)),
+        SizedBox(width: context.w(8)),
+        // Pass pill + status + chevron — fixed width
+        SizedBox(
+          width: context.w(110),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if ((pass['name'] as String?) != null)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: context.w(6), vertical: context.h(2)),
+                  decoration: BoxDecoration(
+                    color: (isExpired ? AppColors.energy : AppColors.aqua).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(context.r(5)),
+                    border: Border.all(color: (isExpired ? AppColors.energy : AppColors.aqua).withValues(alpha: 0.25)),
+                  ),
+                  child: Text(pass['name'] as String,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppStyles.eyebrow.copyWith(
+                          fontSize: context.sp(8),
+                          fontWeight: FontWeight.w800,
+                          color: isExpired ? AppColors.energy : AppColors.aqua)),
+                ),
+              SizedBox(height: context.h(3)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: context.w(7), vertical: context.h(3)),
+                    decoration: BoxDecoration(
+                      color: isExpired ? AppColors.energy.withValues(alpha: 0.1) : AppColors.brand.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(context.r(6)),
+                    ),
+                    child: Text(sub['status'].toString().toUpperCase(),
+                        style: AppStyles.eyebrow.copyWith(
+                            color: isExpired ? AppColors.energy : AppColors.brand, fontSize: context.sp(9))),
+                  ),
+                  SizedBox(width: context.w(4)),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(Icons.keyboard_arrow_down, size: context.r(16), color: context.mutedFg),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Mobile (<600px): compact 3-line card ─────────────────────────────────
+  Widget _buildMobileCardRow(
+    BuildContext context,
+    String name,
+    String memberNo,
+    Map profile,
+    Map pass,
+    Map<String, dynamic> sub,
+    double effectivePrice,
+    double discountAmount,
+    double paid,
+    double balance,
+    bool isExpired,
+    bool isExpanded,
+  ) {
+    final photoUrl = profile['photo_url'] as String?;
+    final passColor = isExpired ? AppColors.energy : AppColors.aqua;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Avatar
+        Container(
+          width: context.r(36),
+          height: context.r(36),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: (isExpired ? AppColors.energy : AppColors.brand).withValues(alpha: 0.12),
+            image: photoUrl != null
+                ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                : null,
+          ),
+          child: photoUrl == null
+              ? Center(
+                  child: Text(_initials(name),
+                      style: AppStyles.displayFont.copyWith(
+                          fontSize: context.sp(12),
+                          fontWeight: FontWeight.bold,
+                          color: isExpired ? AppColors.energy : AppColors.brand)))
+              : null,
+        ),
+        SizedBox(width: context.w(10)),
+        // Content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Line 1: Name + Pass pill
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.displayFont.copyWith(
+                            fontSize: context.sp(13), fontWeight: FontWeight.bold, color: context.fg)),
+                  ),
+                  if ((pass['name'] as String?) != null) ...[
+                    SizedBox(width: context.w(6)),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: context.w(6), vertical: context.h(2)),
+                      decoration: BoxDecoration(
+                        color: passColor.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(context.r(5)),
+                        border: Border.all(color: passColor.withValues(alpha: 0.25)),
+                      ),
+                      child: Text(pass['name'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppStyles.eyebrow.copyWith(
+                              fontSize: context.sp(8), fontWeight: FontWeight.w800, color: passColor)),
+                    ),
+                  ],
+                ],
+              ),
+              SizedBox(height: context.h(3)),
+              // Line 2: MBR + Phone + Status + chevron
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: context.w(5), vertical: context.h(1)),
+                    decoration: BoxDecoration(
+                        color: AppColors.brand.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(context.r(4))),
+                    child: Text(memberNo,
+                        style: AppStyles.eyebrow.copyWith(
+                            fontSize: context.sp(8), color: AppColors.brand, fontWeight: FontWeight.bold)),
+                  ),
+                  SizedBox(width: context.w(5)),
+                  Expanded(
+                    child: Text(profile['phone'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.bodyFont.copyWith(fontSize: context.sp(10), color: context.mutedFg)),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: context.w(7), vertical: context.h(2)),
+                    decoration: BoxDecoration(
+                      color: isExpired ? AppColors.energy.withValues(alpha: 0.1) : AppColors.brand.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(context.r(6)),
+                    ),
+                    child: Text(sub['status'].toString().toUpperCase(),
+                        style: AppStyles.eyebrow.copyWith(
+                            color: isExpired ? AppColors.energy : AppColors.brand, fontSize: context.sp(8))),
+                  ),
+                  SizedBox(width: context.w(4)),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(Icons.keyboard_arrow_down, size: context.r(16), color: context.mutedFg),
+                  ),
+                ],
+              ),
+              SizedBox(height: context.h(5)),
+              // Line 3: Financial summary in one compact row
+              Container(
+                padding: EdgeInsets.symmetric(vertical: context.h(5), horizontal: context.w(8)),
+                decoration: BoxDecoration(
+                  color: context.bg,
+                  borderRadius: BorderRadius.circular(context.r(7)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _mobileFinStat(context, 'TOTAL', '₹${effectivePrice.toStringAsFixed(0)}', context.fg),
+                    _mobileFinStat(context, 'DISC', discountAmount > 0 ? '₹${discountAmount.toStringAsFixed(0)}' : '—', discountAmount > 0 ? AppColors.sun : context.mutedFg),
+                    _mobileFinStat(context, 'PAID', '₹${paid.toStringAsFixed(0)}', AppColors.brand),
+                    _mobileFinStat(context, 'BAL', '₹${balance.toStringAsFixed(0)}', balance > 0 ? AppColors.energy : AppColors.brand),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileFinStat(BuildContext context, String label, String value, Color color) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(7))),
+        SizedBox(height: context.h(1)),
+        Text(value,
+            style: AppStyles.numTabular.copyWith(
+                fontSize: context.sp(12), fontWeight: FontWeight.w800, color: color)),
+      ],
     );
   }
 
