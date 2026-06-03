@@ -83,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final weekVolume = weekLogs.fold(
-          0.0, (sum, l) => sum + (l['volume_kg'] as num).toDouble());
+          0.0, (sum, l) => sum + ((l['volume_kg'] as num?) ?? 0).toDouble());
 
       if (mounted) {
         setState(() {
@@ -114,8 +114,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       checkInDates.add(DateFormat('yyyy-MM-dd').format(dt));
     }
     final today = DateTime.now();
+    final todayKey = DateFormat('yyyy-MM-dd').format(today);
+
+    // If the user hasn't checked in today yet, start counting from yesterday
+    // so an existing streak isn't wiped out mid-day
+    final startDay = checkInDates.contains(todayKey)
+        ? DateTime(today.year, today.month, today.day)
+        : DateTime(today.year, today.month, today.day)
+            .subtract(const Duration(days: 1));
+
     int streak = 0;
-    DateTime current = DateTime(today.year, today.month, today.day);
+    DateTime current = startDay;
     while (true) {
       final key = DateFormat('yyyy-MM-dd').format(current);
       if (checkInDates.contains(key)) {
@@ -204,7 +213,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 32),
               _buildStreakCard()
                   .animate(
-                    key: ValueKey('streak_anim_${DateTime.now().second}'),
+                    key: ValueKey('streak_$_streak'),
                   )
                   .scale(
                     duration: 600.ms,
@@ -216,13 +225,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildStatCards(),
               const SizedBox(height: 32),
               _buildUpNextSection(),
-              const SizedBox(height: 32),
-              _buildComingSoon(
-                'TOP ATHLETES THIS WEEK',
-                'Leaderboard launching soon',
-                AppColors.sun,
-                Icons.emoji_events_outlined,
-              ),
               const SizedBox(height: 48),
               _buildFooter(context),
               const SizedBox(height: 120),
@@ -707,61 +709,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             }).toList(),
           ),
-      ],
-    );
-  }
-
-  Widget _buildComingSoon(
-    String title,
-    String subtitle,
-    Color accentColor,
-    IconData icon,
-  ) {
-    final isDark = context.isDark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: AppStyles.eyebrow.copyWith(color: context.mutedFg)),
-        const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A1A) : context.card,
-            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-            border: Border.all(
-                color: context.border.withValues(alpha: 0.5)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: accentColor, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Coming Soon',
-                    style: AppStyles.bodyFont.copyWith(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppStyles.bodyFont.copyWith(
-                        color: context.mutedFg, fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }

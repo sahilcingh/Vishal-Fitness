@@ -44,6 +44,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       _showError('Password must be at least 6 characters.');
       return;
     }
+    if (!RegExp(r'[!@#\$&*~`%^()_\-+={}\[\]|\\:;"<>,.?/]').hasMatch(newPass)) {
+      _showError('Password must contain at least one special character.');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {

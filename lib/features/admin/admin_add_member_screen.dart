@@ -25,6 +25,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   final _paidController = TextEditingController();
   final _timeSlotController = TextEditingController();
   final _notesController = TextEditingController();
+  final _extraDaysController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
@@ -53,6 +54,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _paidController.dispose();
     _timeSlotController.dispose();
     _notesController.dispose();
+    _extraDaysController.dispose();
     super.dispose();
   }
 
@@ -134,9 +136,12 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     }
   }
 
+  int get _extraDays => int.tryParse(_extraDaysController.text.trim()) ?? 0;
+
   DateTime get _endDate {
     if (_selectedPass == null) return _startDate;
-    return _startDate.add(Duration(days: _selectedPass!['duration_days'] as int));
+    final baseDays = (_selectedPass!['duration_days'] as int?) ?? 0;
+    return _startDate.add(Duration(days: baseDays + _extraDays));
   }
 
   double get _passPrice => (_selectedPass?['price'] as num?)?.toDouble() ?? 0;
@@ -544,11 +549,16 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
 
       final subscriptionId = subRes['id'] as String;
 
-      // Apply discount if any
-      if (_discountAmount > 0) {
+      // Apply discount and/or extra days if provided
+      final subPatch = <String, dynamic>{};
+      if (_discountAmount > 0) subPatch['discount_amount'] = _discountAmount;
+      if (_extraDays > 0) {
+        subPatch['end_date'] = DateFormat('yyyy-MM-dd').format(_endDate);
+      }
+      if (subPatch.isNotEmpty) {
         await supabase
             .from('subscriptions')
-            .update({'discount_amount': _discountAmount})
+            .update(subPatch)
             .eq('id', subscriptionId);
       }
 
@@ -851,6 +861,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     _paidController.clear();
     _timeSlotController.clear();
     _notesController.clear();
+    _extraDaysController.clear();
     setState(() {
       _selectedGender = null;
       _selectedPass = null;
@@ -1023,10 +1034,22 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                             size: context.r(16), color: context.mutedFg),
                       ),
                     ),
+                    SizedBox(height: context.h(12)),
+                    _buildField(
+                      controller: _extraDaysController,
+                      label: 'Extra Days (optional)',
+                      hint: 'e.g. 5 — extends membership end date',
+                      icon: Icons.more_time_outlined,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
+                    ),
                     if (_selectedPass != null) ...[
                       SizedBox(height: context.h(12)),
                       _buildInfoTile(
-                        label: 'End Date (auto-calculated)',
+                        label: _extraDays > 0
+                            ? 'End Date (+$_extraDays extra days)'
+                            : 'End Date (auto-calculated)',
                         value: fmt.format(_endDate),
                         icon: Icons.event_available_outlined,
                         valueColor: AppColors.brand,

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +7,6 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../main_layout.dart';
 import '../admin/admin_layout.dart';
-import '../onboarding/programs_screen.dart';
 import 'change_password_screen.dart';
 import '../../main.dart';
 
@@ -23,17 +21,13 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-  bool isSignIn = true;
   bool isLoading = false;
   bool isAdminMode = false;
 
   // OTP Verification State
-  bool isOtpSent = false;
   bool isForgotPasswordOtpSent = false;
 
   // Controllers
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
@@ -41,8 +35,6 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _otpController.dispose();
@@ -54,39 +46,18 @@ class _SignInScreenState extends State<SignInScreen> {
   Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
       _showError('Please fill in all fields.');
       return;
     }
 
-    // NEW LOGIC: Admin mode is ONLY for signing in.
-    if (isAdminMode) {
-      setState(() => isLoading = true);
-      try {
-        await supabase.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-        await _navigateToDashboard();
-      } on AuthException catch (e) {
-        _showError(e.message);
-      } catch (e) {
-        _showError('Error: $e');
-      } finally {
-        if (mounted) setState(() => isLoading = false);
-      }
-      return;
-    }
+    setState(() => isLoading = true);
+    try {
+      String signinEmail = email;
 
-    // MEMBER FLOW
-    if (isSignIn) {
-      // Member Sign In — also accepts 10-digit phone number
-      setState(() => isLoading = true);
-      try {
-        String signinEmail = email;
+      // Allow members to sign in with 10-digit phone number
+      if (!isAdminMode) {
         final onlyDigits = email.replaceAll(RegExp(r'[^0-9]'), '');
         if (onlyDigits.length == 10 && !email.contains('@')) {
           final found = await supabase.rpc(
@@ -100,83 +71,19 @@ class _SignInScreenState extends State<SignInScreen> {
           }
           signinEmail = found;
         }
-        await supabase.auth.signInWithPassword(email: signinEmail, password: password);
-        await _navigateToDashboard();
-      } on AuthException catch (e) {
-        _showError(e.message);
-      } catch (e) {
-        _showError('Error: $e');
-      } finally {
-        if (mounted) setState(() => isLoading = false);
-      }
-    } else {
-      // Member Sign Up
-      if (name.isEmpty || phone.isEmpty) {
-        _showError('Please fill in name and phone.');
-        return;
       }
 
-      final phoneDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (phoneDigits.length != 10) {
-        _showError('Phone number must be exactly 10 digits.');
-        return;
-      }
-
-      if (password.length < 6) {
-        _showError('Password must be at least 6 characters long.');
-        return;
-      }
-
-      if (!RegExp(r'[!@#\$&*~`%^()_\-+={}\[\]|\\:;"<>,.?/]').hasMatch(password)) {
-        _showError('Password must contain at least one special character.');
-        return;
-      }
-
-      setState(() => isLoading = true);
-      try {
-        final bool emailExists = await supabase.rpc(
-          'check_email_exists',
-          params: {'email_to_check': email},
-        );
-
-        if (emailExists) {
-          _showError(
-            'This email is already registered. Please sign in instead.',
-          );
-          setState(() => isSignIn = true);
-          return;
-        }
-
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProgramsScreen(
-              prefillName: name,
-              prefillPhone: phone,
-              prefillEmail: email,
-              prefillPassword: password,
-            ),
-          ),
-        );
-      } catch (e) {
-        debugPrint('Error checking email: $e');
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProgramsScreen(
-                prefillName: name,
-                prefillPhone: phone,
-                prefillEmail: email,
-                prefillPassword: password,
-              ),
-            ),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => isLoading = false);
-      }
+      await supabase.auth.signInWithPassword(
+        email: signinEmail,
+        password: password,
+      );
+      await _navigateToDashboard();
+    } on AuthException catch (e) {
+      _showError(e.message);
+    } catch (e) {
+      _showError('Sign in failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -207,35 +114,6 @@ class _SignInScreenState extends State<SignInScreen> {
       _showError(e.message);
     } catch (e) {
       _showError('Error processing request: $e');
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  // --- Step 2: OTP Verification Logic ---
-  Future<void> _verifyOtp() async {
-    final otp = _otpController.text.trim();
-    final email = _emailController.text.trim();
-
-    if (otp.isEmpty) {
-      _showError('Please enter the 6-digit code.');
-      return;
-    }
-
-    setState(() => isLoading = true);
-
-    try {
-      await supabase.auth.verifyOTP(
-        type: OtpType.signup,
-        token: otp,
-        email: email,
-      );
-
-      await _navigateToDashboard();
-    } on AuthException catch (e) {
-      _showError(e.message);
-    } catch (e) {
-      _showError('Invalid verification code.');
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -448,7 +326,7 @@ class _SignInScreenState extends State<SignInScreen> {
         children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 500),
-            child: _buildBackgroundImage(context, key: ValueKey(isAdminMode)),
+            child: _buildBackground(context, key: ValueKey(isAdminMode)),
           ),
           SafeArea(
             child: screenWidth > 800
@@ -492,6 +370,8 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ),
                 ),
+                SizedBox(height: context.h(36)),
+                _buildWideHighlights(context),
                 const Spacer(),
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
@@ -505,13 +385,23 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
         SizedBox(
           width: 440,
-          child: Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(context.w(32)),
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOutCubic,
-                child: _buildAuthCard(context),
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.isDark || isAdminMode
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.black.withValues(alpha: 0.015),
+              border: Border(
+                left: BorderSide(color: context.border.withValues(alpha: 0.4)),
+              ),
+            ),
+            child: Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(context.w(32)),
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOutCubic,
+                  child: _buildAuthCard(context),
+                ),
               ),
             ),
           ),
@@ -592,37 +482,67 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildBackgroundImage(BuildContext context, {Key? key}) {
+  Widget _buildBackground(BuildContext context, {Key? key}) {
+    final bool useDark = context.isDark || isAdminMode;
+    final bgColor = useDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final gradient = isAdminMode ? AppColors.gradientCool : AppColors.gradientBrand;
+    final orbPrimary = isAdminMode ? AppColors.aqua : AppColors.brand;
+    final orbSecondary = isAdminMode ? AppColors.pulse : AppColors.energy;
+
     return Container(
       key: key,
       width: double.infinity,
       height: double.infinity,
-      decoration: BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage(
-            isAdminMode
-                ? 'assets/vishal/gym_bg.jpg'
-                : 'assets/vishal/signin_bg.jpg',
+      color: bgColor,
+      child: Stack(
+        children: [
+          // Soft orb top-right
+          Positioned(
+            top: -120,
+            right: -120,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    orbPrimary.withValues(alpha: useDark ? 0.18 : 0.10),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
           ),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(
-            isAdminMode
-                ? Colors.black.withValues(alpha: 0.8)
-                : (context.isDark
-                      ? Colors.black.withValues(alpha: 0.6)
-                      : Colors.white.withValues(alpha: 0.4)),
-            isAdminMode
-                ? BlendMode.darken
-                : (context.isDark ? BlendMode.darken : BlendMode.lighten),
+          // Soft orb bottom-left
+          Positioned(
+            bottom: -100,
+            left: -80,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    orbSecondary.withValues(alpha: useDark ? 0.13 : 0.07),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: isAdminMode ? 8.0 : 2.0,
-          sigmaY: isAdminMode ? 8.0 : 2.0,
-        ),
-        child: Container(color: Colors.transparent),
+          // Left accent stripe
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 3,
+              decoration: BoxDecoration(gradient: gradient),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -797,7 +717,7 @@ class _SignInScreenState extends State<SignInScreen> {
               padding: EdgeInsets.all(context.w(24)),
               child: isForgotPasswordOtpSent
                   ? _buildForgotPasswordForm()
-                  : (isOtpSent ? _buildOtpForm() : _buildStandardAuthForm()),
+                  : _buildStandardAuthForm(),
             ),
           ],
         ),
@@ -805,92 +725,23 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  // --- STANDARD SIGN IN / SIGN UP FORM ---
+  // --- SIGN IN FORM ---
   Widget _buildStandardAuthForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: context.h(4)),
 
-        // Custom Tab Toggle (Hidden in Admin Mode)
-        if (!isAdminMode) ...[
-          Container(
-            height: context.h(48),
-            decoration: BoxDecoration(
-              color: context.bg,
-              borderRadius: BorderRadius.circular(
-                context.r(AppStyles.radiusMd),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => isSignIn = true),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: isSignIn ? AppColors.gradientBrand : null,
-                        borderRadius: BorderRadius.circular(
-                          context.r(AppStyles.radiusMd),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Sign in',
-                        style: AppStyles.bodyFont.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: context.sp(14),
-                          color: isSignIn ? context.primaryFg : context.mutedFg,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => isSignIn = false),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: !isSignIn ? AppColors.gradientBrand : null,
-                        borderRadius: BorderRadius.circular(
-                          context.r(AppStyles.radiusMd),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Sign up',
-                        style: AppStyles.bodyFont.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: context.sp(14),
-                          color: !isSignIn
-                              ? context.primaryFg
-                              : context.mutedFg,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: context.h(24)),
-        ] else ...[
-          // Admin Mode Header inside card
+        // Admin Mode Header
+        if (isAdminMode) ...[
           Row(
             children: [
-              Icon(
-                Icons.shield_outlined,
-                color: AppColors.aqua,
-                size: context.w(18),
-              ),
+              Icon(Icons.shield_outlined, color: AppColors.aqua, size: context.w(18)),
               SizedBox(width: context.w(8)),
               Flexible(
                 child: Text(
                   'AUTHORIZED PERSONNEL ONLY',
-                  style: AppStyles.eyebrow.copyWith(
-                    color: AppColors.aqua,
-                    fontSize: context.sp(10),
-                  ),
+                  style: AppStyles.eyebrow.copyWith(color: AppColors.aqua, fontSize: context.sp(10)),
                 ),
               ),
             ],
@@ -898,63 +749,16 @@ class _SignInScreenState extends State<SignInScreen> {
           SizedBox(height: context.h(20)),
         ],
 
-        // --- Extra Fields for Sign Up (User only) ---
-        if (!isSignIn && !isAdminMode) ...[
-          _buildInputLabel('FULL NAME'),
-          _buildTextField(_nameController, 'Mara Voss', TextInputType.name),
-          SizedBox(height: context.h(20)),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildInputLabel('PHONE NUMBER'),
-              SizedBox(width: context.w(8)),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.mark_chat_unread_outlined,
-                        size: context.w(12),
-                        color: context.mutedFg,
-                      ),
-                      SizedBox(width: context.w(4)),
-                      Text(
-                        'WhatsApp verify coming soon',
-                        style: AppStyles.eyebrow.copyWith(
-                          color: context.mutedFg,
-                          fontSize: context.sp(8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          _buildTextField(
-            _phoneController,
-            '9876543210',
-            TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-          ),
-          SizedBox(height: context.h(20)),
-        ],
-
-        // --- Standard Fields ---
-        _buildInputLabel(isAdminMode ? 'ADMIN EMAIL' : (isSignIn ? 'EMAIL OR PHONE' : 'EMAIL')),
+        // Email / Phone field
+        _buildInputLabel(isAdminMode ? 'ADMIN EMAIL' : 'EMAIL OR PHONE'),
         _buildTextField(
           _emailController,
-          isAdminMode ? 'admin@gym.com' : (isSignIn ? 'you@gmail.com or 9876543210' : 'you@gmail.com'),
-          isSignIn && !isAdminMode ? TextInputType.emailAddress : TextInputType.emailAddress,
+          isAdminMode ? 'admin@yourgym.com' : 'Email or 10-digit phone',
+          TextInputType.emailAddress,
         ),
         SizedBox(height: context.h(20)),
 
+        // Password field
         _buildInputLabel(isAdminMode ? 'MASTER PASSWORD' : 'PASSWORD'),
         _buildTextField(
           _passwordController,
@@ -968,19 +772,12 @@ class _SignInScreenState extends State<SignInScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Icon(
-                Icons.fingerprint,
-                color: context.mutedFg,
-                size: context.w(12),
-              ),
+              Icon(Icons.fingerprint, color: context.mutedFg, size: context.w(12)),
               SizedBox(width: context.w(4)),
               Flexible(
                 child: Text(
                   'Biometrics enabled',
-                  style: AppStyles.eyebrow.copyWith(
-                    color: context.mutedFg,
-                    fontSize: context.sp(9),
-                  ),
+                  style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(9)),
                   textAlign: TextAlign.end,
                 ),
               ),
@@ -988,9 +785,8 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
           SizedBox(height: context.h(12)),
         ] else ...[
-          if (isSignIn) ...[
-            SizedBox(height: context.h(12)),
-            Row(
+          SizedBox(height: context.h(12)),
+          Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Flexible(
@@ -1008,20 +804,16 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
             ],
-            ),            SizedBox(height: context.h(12)),
-          ] else ...[
-            SizedBox(height: context.h(24)),
-          ],
+          ),
+          SizedBox(height: context.h(12)),
         ],
 
-        // Primary Action Button
+        // Sign In Button
         Container(
           width: double.infinity,
           height: context.h(52),
           decoration: BoxDecoration(
-            gradient: isAdminMode
-                ? AppColors.gradientCool
-                : AppColors.gradientBrand,
+            gradient: isAdminMode ? AppColors.gradientCool : AppColors.gradientBrand,
             borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
           ),
           child: ElevatedButton(
@@ -1030,9 +822,7 @@ class _SignInScreenState extends State<SignInScreen> {
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  context.r(AppStyles.radiusMd),
-                ),
+                borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
               ),
               disabledBackgroundColor: Colors.transparent,
             ),
@@ -1040,19 +830,14 @@ class _SignInScreenState extends State<SignInScreen> {
                 ? SizedBox(
                     height: context.w(24),
                     width: context.w(24),
-                    child: CircularProgressIndicator(
-                      color: context.primaryColor,
-                      strokeWidth: 3,
-                    ),
+                    child: CircularProgressIndicator(color: context.primaryColor, strokeWidth: 3),
                   )
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Flexible(
                         child: Text(
-                          isAdminMode
-                              ? 'Authenticate'
-                              : (isSignIn ? 'Sign in' : 'Choose Pass & Sign Up'),
+                          isAdminMode ? 'Authenticate' : 'Sign in',
                           style: AppStyles.bodyFont.copyWith(
                             fontWeight: FontWeight.w600,
                             fontSize: context.sp(16),
@@ -1071,39 +856,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
           ),
         ),
-
-        if (!isAdminMode) ...[
-          SizedBox(height: context.h(20)),
-          // Footer Link (User only)
-          Center(
-            child: GestureDetector(
-              onTap: () => setState(() => isSignIn = !isSignIn),
-              child: RichText(
-                text: TextSpan(
-                  style: AppStyles.bodyFont.copyWith(
-                    color: context.mutedFg,
-                    fontSize: context.sp(13),
-                  ),
-                  children: [
-                    TextSpan(
-                      text: isSignIn
-                          ? "Don't have an account? "
-                          : "Already have an account? ",
-                    ),
-                    TextSpan(
-                      text: isSignIn ? 'Sign up' : 'Sign in',
-                      style: AppStyles.bodyFont.copyWith(
-                        color: context.primaryColor,
-                        fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -1154,7 +906,7 @@ class _SignInScreenState extends State<SignInScreen> {
         _buildInputLabel('VERIFICATION CODE'),
         _buildTextField(
           _otpController,
-          '123456',
+          'Enter 6-digit code',
           TextInputType.number,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -1235,119 +987,6 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  // --- OTP VERIFICATION FORM ---
-  Widget _buildOtpForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: context.h(8)),
-        Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(context.w(8)),
-              decoration: BoxDecoration(
-                color: AppColors.pulse.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.mark_email_read,
-                color: AppColors.pulse,
-                size: context.w(20),
-              ),
-            ),
-            SizedBox(width: context.w(12)),
-            Flexible(
-              child: Text(
-                'VERIFY EMAIL',
-                style: AppStyles.eyebrow.copyWith(
-                  color: context.fg,
-                  fontSize: context.sp(14),
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: context.h(16)),
-        Text(
-          "We've sent a 6-digit secure code to\n${_emailController.text}",
-          style: AppStyles.bodyFont.copyWith(
-            color: context.mutedFg,
-            height: 1.5,
-            fontSize: context.sp(14),
-          ),
-        ),
-        SizedBox(height: context.h(24)),
-
-        _buildInputLabel('VERIFICATION CODE'),
-        _buildTextField(
-          _otpController,
-          '123456',
-          TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-        ),
-        SizedBox(height: context.h(24)),
-
-        // Verify Button
-        Container(
-          width: double.infinity,
-          height: context.h(52),
-          decoration: BoxDecoration(
-            gradient: AppColors.gradientBrand,
-            borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
-          ),
-          child: ElevatedButton(
-            onPressed: isLoading ? null : _verifyOtp,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  context.r(AppStyles.radiusMd),
-                ),
-              ),
-              disabledBackgroundColor: Colors.transparent,
-            ),
-            child: isLoading
-                ? SizedBox(
-                    height: context.w(24),
-                    width: context.w(24),
-                    child: CircularProgressIndicator(
-                      color: context.primaryColor,
-                      strokeWidth: 3,
-                    ),
-                  )
-                : Text(
-                    'Verify & Continue',
-                    style: AppStyles.bodyFont.copyWith(
-                      fontWeight: FontWeight.w600,
-                      fontSize: context.sp(16),
-                      color: context.primaryColor,
-                    ),
-                  ),
-          ),
-        ),
-        SizedBox(height: context.h(16)),
-
-        // Cancel / Back Button
-        Center(
-          child: TextButton(
-            onPressed: () => setState(() => isOtpSent = false),
-            child: Text(
-              'Cancel',
-              style: AppStyles.bodyFont.copyWith(
-                color: context.mutedFg,
-                fontWeight: FontWeight.w500,
-                fontSize: context.sp(14),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   // --- Helper Widgets ---
   Widget _buildInputLabel(String label) {
@@ -1477,6 +1116,176 @@ class _SignInScreenState extends State<SignInScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWideHighlights(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: isAdminMode
+          ? _buildAdminHighlights(context, key: const ValueKey('admin_hl'))
+          : _buildMemberHighlights(context, key: const ValueKey('member_hl')),
+    );
+  }
+
+  Widget _buildMemberHighlights(BuildContext context, {Key? key}) {
+    return Column(
+      key: key,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _buildStatChip(context, '200+', 'Athletes', AppColors.brand),
+            SizedBox(width: context.w(12)),
+            _buildStatChip(context, '100/wk', 'Classes', AppColors.energy),
+            SizedBox(width: context.w(12)),
+            _buildStatChip(context, '4.9★', 'Rating', AppColors.aqua),
+          ],
+        ),
+        SizedBox(height: context.h(28)),
+        _buildHighlightRow(
+          context,
+          Icons.fitness_center,
+          AppColors.brand,
+          'Premium Equipment',
+          'Free weights, machines & dedicated cardio zones for every goal.',
+        ),
+        SizedBox(height: context.h(20)),
+        _buildHighlightRow(
+          context,
+          Icons.event_available,
+          AppColors.energy,
+          '100+ Classes Weekly',
+          'Yoga, Zumba, HIIT & CrossFit — guided by expert trainers.',
+        ),
+        SizedBox(height: context.h(20)),
+        _buildHighlightRow(
+          context,
+          Icons.qr_code_scanner,
+          AppColors.aqua,
+          'Instant Digital Pass',
+          'Buy once, scan on arrival. No queues, no paperwork.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdminHighlights(BuildContext context, {Key? key}) {
+    return Column(
+      key: key,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHighlightRow(
+          context,
+          Icons.people_alt,
+          AppColors.aqua,
+          'Member Management',
+          'Add, edit and track all gym subscriptions in one place.',
+        ),
+        SizedBox(height: context.h(20)),
+        _buildHighlightRow(
+          context,
+          Icons.bar_chart,
+          AppColors.energy,
+          'Live Analytics',
+          'Monitor revenue, attendance and expiring memberships.',
+        ),
+        SizedBox(height: context.h(20)),
+        _buildHighlightRow(
+          context,
+          Icons.campaign,
+          AppColors.pulse,
+          'Announcements',
+          'Push updates and alerts directly to all members instantly.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatChip(
+    BuildContext context,
+    String value,
+    String label,
+    Color color,
+  ) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.w(14),
+        vertical: context.h(9),
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(context.r(20)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: AppStyles.displayFont.copyWith(
+              fontSize: context.sp(15),
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          SizedBox(width: context.w(6)),
+          Text(
+            label,
+            style: AppStyles.bodyFont.copyWith(
+              fontSize: context.sp(12),
+              color: context.mutedFg,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHighlightRow(
+    BuildContext context,
+    IconData icon,
+    Color color,
+    String title,
+    String subtitle,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: EdgeInsets.all(context.w(12)),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(context.r(12)),
+          ),
+          child: Icon(icon, color: color, size: context.w(22)),
+        ),
+        SizedBox(width: context.w(16)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppStyles.bodyFont.copyWith(
+                  fontSize: context.sp(15),
+                  fontWeight: FontWeight.w700,
+                  color: context.fg,
+                ),
+              ),
+              SizedBox(height: context.h(3)),
+              Text(
+                subtitle,
+                style: AppStyles.bodyFont.copyWith(
+                  fontSize: context.sp(13),
+                  color: context.mutedFg,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

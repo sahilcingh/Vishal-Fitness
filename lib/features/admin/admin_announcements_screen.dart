@@ -219,7 +219,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                         border: Border.all(color: context.border),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: context.r(10),
                             offset: Offset(0, context.h(4)),
                           ),
@@ -270,7 +270,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: context.w(8), vertical: context.h(4)),
                               decoration: BoxDecoration(
-                                color: context.mutedFg.withOpacity(0.1),
+                                color: context.mutedFg.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(context.r(4)),
                               ),
                               child: Text(
@@ -290,3 +290,4 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     );
   }
 }
+

@@ -79,6 +79,21 @@ class _PassScreenState extends State<PassScreen> {
     HapticFeedback.mediumImpact();
 
     try {
+      // Ensure a profile row exists — prevents FK violation on check_ins
+      if (_profile == null) {
+        await supabase.from('profiles').upsert(
+          {
+            'id': user.id,
+            'full_name': user.userMetadata?['full_name'] as String? ??
+                user.email?.split('@').first ??
+                'Member',
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          onConflict: 'id',
+          ignoreDuplicates: true,
+        );
+      }
+
       await supabase.from('check_ins').insert({'user_id': user.id});
 
       if (mounted) {
@@ -94,10 +109,11 @@ class _PassScreenState extends State<PassScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to check in: $e'),
+            content: const Text('Check-in failed. Please contact staff.'),
             backgroundColor: AppColors.energy,
           ),
         );
+        debugPrint('Check-in error: $e');
       }
     } finally {
       if (mounted) setState(() => _isCheckingIn = false);
@@ -149,13 +165,15 @@ class _PassScreenState extends State<PassScreen> {
     final user = supabase.auth.currentUser;
     final memberId = user?.id.substring(0, 8).toUpperCase() ?? "—";
 
+    final subStatus = (_subscription?['status'] as String? ?? 'unknown').toUpperCase();
+    final passName = (_subscription?['gym_passes'] as Map<String, dynamic>?)?['name'] as String? ?? 'Gym Pass';
     final qrPayload = jsonEncode({
       'uid': user?.id,
       'email': user?.email,
       'name': _profile?['full_name'] ?? 'Member',
       'joined': _profile?['created_at'] ?? '',
-      'status': 'ACTIVE',
-      'plan': 'Premium Pass',
+      'status': subStatus,
+      'plan': passName,
       't': DateTime.now().millisecondsSinceEpoch,
     });
 
@@ -213,7 +231,7 @@ class _PassScreenState extends State<PassScreen> {
         child: RichText(
           text: TextSpan(
             style: AppStyles.eyebrow.copyWith(
-              color: context.fg.withOpacity(0.5),
+              color: context.fg.withValues(alpha: 0.5),
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),
@@ -316,7 +334,7 @@ class _PassScreenState extends State<PassScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -529,7 +547,7 @@ class _PassScreenState extends State<PassScreen> {
                                   height: dashHeight,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.25),
+                                      color: Colors.white.withValues(alpha: 0.25),
                                     ),
                                   ),
                                 ),
@@ -698,7 +716,7 @@ class _PassScreenState extends State<PassScreen> {
             decoration: BoxDecoration(
               color: context.card,
               borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-              border: Border.all(color: context.border.withOpacity(0.5)),
+              border: Border.all(color: context.border.withValues(alpha: 0.5)),
             ),
             child: Center(
               child: Text(

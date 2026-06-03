@@ -297,7 +297,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         border: Border.all(color: context.border),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: context.r(10),
                             offset: Offset(0, context.h(4)),
                           ),
@@ -390,9 +390,9 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: context.w(8), vertical: context.h(4)),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(context.r(6)),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(
         label,
@@ -401,3 +401,4 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     );
   }
 }
+

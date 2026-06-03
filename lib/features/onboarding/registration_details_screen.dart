@@ -405,7 +405,7 @@ class _RegistrationDetailsScreenState extends State<RegistrationDetailsScreen> {
             Container(
               padding: EdgeInsets.all(context.r(8)),
               decoration: BoxDecoration(
-                color: AppColors.pulse.withOpacity(0.15),
+                color: AppColors.pulse.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.mark_email_read, color: AppColors.pulse, size: context.r(24)),
@@ -555,3 +555,4 @@ class _RegistrationDetailsScreenState extends State<RegistrationDetailsScreen> {
     );
   }
 }
+

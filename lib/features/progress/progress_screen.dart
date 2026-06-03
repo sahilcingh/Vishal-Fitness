@@ -16,6 +16,8 @@ class ProgressScreen extends StatefulWidget {
 
 class _ProgressScreenState extends State<ProgressScreen> {
   List<Map<String, dynamic>> _logs = [];
+  List<Map<String, dynamic>> _sessions = [];
+  List<Map<String, dynamic>> _personalRecords = [];
   bool _isLoading = true;
 
   @override
@@ -29,27 +31,83 @@ class _ProgressScreenState extends State<ProgressScreen> {
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      // Match React: Fetch last 30 days of logs ordered by time
       final thirtyDaysAgo = DateTime.now()
           .subtract(const Duration(days: 30))
           .toIso8601String();
 
-      final response = await supabase
-          .from('workout_logs')
-          .select('performed_at, volume_kg, duration_min, name')
-          .eq('user_id', user.id)
-          .gte('performed_at', thirtyDaysAgo)
-          .order('performed_at', ascending: true);
+      // Fetch volume chart data + detailed sessions + PRs in parallel
+      final results = await Future.wait([
+        supabase
+            .from('workout_logs')
+            .select('performed_at, volume_kg, duration_min, name')
+            .eq('user_id', user.id)
+            .gte('performed_at', thirtyDaysAgo)
+            .order('performed_at', ascending: true),
+        // Detailed workout sessions
+        supabase
+            .from('workout_sessions')
+            .select('id, name, started_at, finished_at, duration_seconds')
+            .eq('user_id', user.id)
+            .not('finished_at', 'is', null)
+            .order('started_at', ascending: false)
+            .limit(20),
+        // All sets for PR calculation
+        supabase
+            .from('workout_sets')
+            .select('exercise_name, weight_kg, reps, workout_sessions!inner(user_id)')
+            .eq('workout_sessions.user_id', user.id)
+            .eq('is_warmup', false)
+            .not('weight_kg', 'is', null)
+            .not('reps', 'is', null),
+      ]);
+
+      // Compute personal records (best weight per exercise)
+      final setsRaw = results[2] as List;
+      final Map<String, Map<String, dynamic>> prMap = {};
+      for (final raw in setsRaw) {
+        final s = raw as Map<String, dynamic>;
+        final name = s['exercise_name'] as String? ?? '';
+        if (name.isEmpty) continue;
+        final w = (s['weight_kg'] as num?)?.toDouble() ?? 0;
+        final r = s['reps'] as int? ?? 0;
+        if (!prMap.containsKey(name) || w > (prMap[name]!['weight'] as double)) {
+          prMap[name] = {'exercise': name, 'weight': w, 'reps': r};
+        }
+      }
+      final prs = prMap.values.toList()
+        ..sort((a, b) => (b['weight'] as double).compareTo(a['weight'] as double));
 
       if (mounted) {
         setState(() {
-          _logs = List<Map<String, dynamic>>.from(response);
+          _logs = List<Map<String, dynamic>>.from(results[0] as List);
+          _sessions = List<Map<String, dynamic>>.from(results[1] as List);
+          _personalRecords = prs.cast<Map<String, dynamic>>();
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetching logs: $e');
-      if (mounted) setState(() => _isLoading = false);
+      // Fallback: try just workout_logs if new tables don't exist yet
+      try {
+        final user = supabase.auth.currentUser;
+        if (user == null) return;
+        final thirtyDaysAgo =
+            DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
+        final response = await supabase
+            .from('workout_logs')
+            .select('performed_at, volume_kg, duration_min, name')
+            .eq('user_id', user.id)
+            .gte('performed_at', thirtyDaysAgo)
+            .order('performed_at', ascending: true);
+        if (mounted) {
+          setState(() {
+            _logs = List<Map<String, dynamic>>.from(response);
+            _isLoading = false;
+          });
+        }
+      } catch (e2) {
+        debugPrint('Error fetching logs: $e2');
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -72,7 +130,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             DateTime logDate = DateTime.parse(l['performed_at']);
             return DateFormat('yyyy-MM-dd').format(logDate) == dateKey;
           })
-          .fold(0.0, (sum, l) => sum + (l['volume_kg'] as num).toDouble());
+          .fold(0.0, (sum, l) => sum + ((l['volume_kg'] as num?) ?? 0).toDouble());
 
       days.add({'short': shortName, 'volume': dailyVolume});
     }
@@ -82,8 +140,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
   double get _totalVolume =>
       _logs.fold(0.0, (sum, l) => sum + (l['volume_kg'] as num).toDouble());
   double get _totalMinutes =>
-      _logs.fold(0.0, (sum, l) => sum + (l['duration_min'] as num).toDouble());
-  int get _sessions => _logs.length;
+      _logs.fold(0.0, (sum, l) => sum + ((l['duration_min'] as num?) ?? 0).toDouble());
+  int get _sessionCount => _logs.length;
 
   double get _bestDay {
     if (_chartData.isEmpty) return 0;
@@ -172,7 +230,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     const SizedBox(height: 24),
                     _buildTiles(),
                     const SizedBox(height: 32),
-                    _buildPersonalRecords(),
+                    if (_personalRecords.isNotEmpty) ...[
+                      _buildPersonalRecordsSection(),
+                      const SizedBox(height: 32),
+                    ],
+                    _buildWorkoutHistorySection(),
                     const SizedBox(height: 32),
                     _buildRecentSessions(),
                     const SizedBox(height: 48),
@@ -197,7 +259,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         child: RichText(
           text: TextSpan(
             style: AppStyles.eyebrow.copyWith(
-              color: context.fg.withOpacity(0.5),
+              color: context.fg.withValues(alpha: 0.5),
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),
@@ -272,10 +334,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
       decoration: BoxDecoration(
         color: context.card,
         borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-        border: Border.all(color: context.border.withOpacity(0.5)),
+        border: Border.all(color: context.border.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -292,7 +354,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isDark 
-                    ? AppColors.brand.withOpacity(0.05) 
+                    ? AppColors.brand.withValues(alpha: 0.05) 
                     : const Color(0xFFE2F8EB),
               ),
             ),
@@ -306,7 +368,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isDark 
-                    ? AppColors.aqua.withOpacity(0.05)
+                    ? AppColors.aqua.withValues(alpha: 0.05)
                     : const Color(0xFFE5F6FF),
               ),
             ),
@@ -388,55 +450,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  Widget _buildPersonalRecords() {
-    final isDark = context.isDark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'PERSONAL RECORDS (PRs)',
-          style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A1A) : context.card,
-            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-            border: Border.all(color: context.border.withValues(alpha: 0.5)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.energy.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.emoji_events_outlined, color: AppColors.energy, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Coming Soon',
-                    style: AppStyles.bodyFont.copyWith(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  Text(
-                    'Track your 1RM and PRs here',
-                    style: AppStyles.bodyFont.copyWith(color: context.mutedFg, fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildTiles() {
     return Row(
       children: [
@@ -444,7 +457,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           child: _buildTile(
             icon: Icons.show_chart,
             label: 'SESSIONS',
-            value: _sessions.toString(),
+            value: _sessionCount.toString(),
             accentBg: const Color(0xFFE2F8EB),
             accentIcon: AppColors.brand,
           ),
@@ -488,7 +501,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         border: Border.all(color: context.border.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -543,6 +556,178 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
+  // ── Personal Records ────────────────────────────────────────────────────────
+
+  Widget _buildPersonalRecordsSection() {
+    final fmt = NumberFormat('#,##0.#');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.emoji_events, color: AppColors.sun, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'PERSONAL RECORDS',
+              style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: context.card,
+            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+            border: Border.all(color: context.border.withValues(alpha: 0.5)),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: _personalRecords.length,
+            separatorBuilder: (_, i) =>
+                Divider(height: 1, color: context.border.withValues(alpha: 0.3)),
+            itemBuilder: (_, i) {
+              final pr = _personalRecords[i];
+              final exercise = pr['exercise'] as String;
+              final weight = (pr['weight'] as double);
+              final reps = pr['reps'] as int;
+              final weightStr = weight % 1 == 0
+                  ? '${weight.toInt()} kg'
+                  : '${fmt.format(weight)} kg';
+              return ListTile(
+                dense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.sun.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.emoji_events,
+                      color: AppColors.sun, size: 15),
+                ),
+                title: Text(
+                  exercise,
+                  style: AppStyles.bodyFont.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: context.fg),
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      weightStr,
+                      style: AppStyles.numTabular.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: AppColors.brand),
+                    ),
+                    Text(
+                      '× $reps reps',
+                      style: AppStyles.eyebrow.copyWith(
+                          color: context.mutedFg, fontSize: 9),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Workout History ──────────────────────────────────────────────────────────
+
+  Widget _buildWorkoutHistorySection() {
+    if (_sessions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.history, color: AppColors.aqua, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'WORKOUT HISTORY',
+              style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: context.card,
+            borderRadius: BorderRadius.circular(AppStyles.radiusLg),
+            border: Border.all(color: context.border.withValues(alpha: 0.5)),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: _sessions.length,
+            separatorBuilder: (_, i) =>
+                Divider(height: 1, color: context.border.withValues(alpha: 0.3)),
+            itemBuilder: (_, i) {
+              final s = _sessions[i];
+              final name = s['name'] as String? ?? 'Workout';
+              final startedAt = s['started_at'] as String?;
+              final durationSec = s['duration_seconds'] as int? ?? 0;
+              final mins = durationSec ~/ 60;
+              DateTime? dt;
+              if (startedAt != null) {
+                dt = DateTime.tryParse(startedAt)?.toLocal();
+              }
+
+              return ListTile(
+                dense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.aqua.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.fitness_center,
+                      color: AppColors.aqua, size: 15),
+                ),
+                title: Text(
+                  name,
+                  style: AppStyles.bodyFont.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: context.fg),
+                ),
+                subtitle: dt != null
+                    ? Text(
+                        DateFormat('EEE, d MMM yyyy').format(dt),
+                        style: AppStyles.bodyFont.copyWith(
+                            color: context.mutedFg, fontSize: 11),
+                      )
+                    : null,
+                trailing: mins > 0
+                    ? Text(
+                        '${mins}m',
+                        style: AppStyles.numTabular.copyWith(
+                            color: context.mutedFg,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
+                      )
+                    : null,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildRecentSessions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,7 +747,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             decoration: BoxDecoration(
               color: context.card,
               borderRadius: BorderRadius.circular(AppStyles.radiusLg),
-              border: Border.all(color: context.border.withOpacity(0.5)),
+              border: Border.all(color: context.border.withValues(alpha: 0.5)),
             ),
             child: Text(
               'No sessions logged in the last 30 days.',
@@ -686,8 +871,8 @@ class _DynamicAreaChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          AppColors.brand.withOpacity(0.6),
-          AppColors.aqua.withOpacity(0.0),
+          AppColors.brand.withValues(alpha: 0.6),
+          AppColors.aqua.withValues(alpha: 0.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
@@ -719,3 +904,4 @@ class _DynamicAreaChartPainter extends CustomPainter {
     return oldDelegate.volumes != volumes || oldDelegate.maxVolume != maxVolume;
   }
 }
+

@@ -88,7 +88,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             style: AppStyles.bodyFont.copyWith(
               fontSize: 14,
               height: 1.6,
-              color: context.fg.withOpacity(0.8),
+              color: context.fg.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -96,3 +96,4 @@ class PrivacyPolicyScreen extends StatelessWidget {
     );
   }
 }
+

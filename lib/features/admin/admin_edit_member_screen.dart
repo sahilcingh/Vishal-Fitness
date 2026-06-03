@@ -68,39 +68,55 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
 
   Future<void> _loadProfileData() async {
     try {
+      // Try full profile with all optional columns
       final res = await supabase
           .from('profiles')
           .select('full_name, phone, gender, time_slot, photo_url')
           .eq('id', widget.userId)
-          .single();
+          .maybeSingle();
       if (mounted) {
         setState(() {
-          _nameController.text = res['full_name'] as String? ?? '';
-          _phoneController.text = res['phone'] as String? ?? '';
-          _selectedGender = res['gender'] as String?;
-          _timeSlotController.text = res['time_slot'] as String? ?? '';
-          _existingPhotoUrl = res['photo_url'] as String?;
+          _nameController.text = res?['full_name'] as String? ?? '';
+          _phoneController.text = res?['phone'] as String? ?? '';
+          _selectedGender = res?['gender'] as String?;
+          _timeSlotController.text = res?['time_slot'] as String? ?? '';
+          _existingPhotoUrl = res?['photo_url'] as String?;
           _isLoading = false;
         });
       }
     } catch (_) {
-      // Fallback if optional columns (gender, time_slot, photo_url) don't exist yet
+      // Fallback: optional columns (gender, time_slot, photo_url) may not exist
       try {
         final res = await supabase
             .from('profiles')
             .select('full_name, phone')
             .eq('id', widget.userId)
-            .single();
+            .maybeSingle();
         if (mounted) {
           setState(() {
-            _nameController.text = res['full_name'] as String? ?? '';
-            _phoneController.text = res['phone'] as String? ?? '';
+            _nameController.text = res?['full_name'] as String? ?? '';
+            _phoneController.text = res?['phone'] as String? ?? '';
             _isLoading = false;
           });
         }
-      } catch (e2) {
-        debugPrint('Error loading profile: $e2');
-        if (mounted) setState(() => _isLoading = false);
+      } catch (_) {
+        // Last resort: just full_name
+        try {
+          final res = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', widget.userId)
+              .maybeSingle();
+          if (mounted) {
+            setState(() {
+              _nameController.text = res?['full_name'] as String? ?? '';
+              _isLoading = false;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading profile: $e');
+          if (mounted) setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -261,10 +277,40 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
         }
       }
 
-      await supabase
-          .from('profiles')
-          .update(profileUpdate)
-          .eq('id', widget.userId);
+      // Try full update; check if any row was actually changed (0 rows = RLS blocked or missing)
+      bool profileSaved = false;
+      try {
+        final updated = await supabase
+            .from('profiles')
+            .update(profileUpdate)
+            .eq('id', widget.userId)
+            .select('id');
+        profileSaved = (updated as List).isNotEmpty;
+      } catch (_) {
+        // Optional columns missing — fall through to narrower update
+      }
+
+      if (!profileSaved) {
+        // Try with just full_name
+        try {
+          final updated = await supabase
+              .from('profiles')
+              .update({'full_name': profileUpdate['full_name']})
+              .eq('id', widget.userId)
+              .select('id');
+          profileSaved = (updated as List).isNotEmpty;
+        } catch (_) {
+          // ignore — try upsert below
+        }
+      }
+
+      if (!profileSaved) {
+        // Profile row missing or RLS blocking update — upsert to create/fix it
+        await supabase.from('profiles').upsert({
+          'id': widget.userId,
+          'full_name': profileUpdate['full_name'],
+        });
+      }
 
       if (_selectedPass != null) {
         await supabase.from('subscriptions').update({

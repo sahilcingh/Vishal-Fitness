@@ -243,7 +243,7 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
                         border: Border.all(color: context.border),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: context.r(10),
                             offset: Offset(0, context.h(4)),
                           ),
@@ -332,3 +332,4 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
     );
   }
 }
+

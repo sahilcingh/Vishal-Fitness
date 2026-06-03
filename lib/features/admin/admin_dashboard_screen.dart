@@ -24,6 +24,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _criticalCount = 0;
   int _expiringCount = 0;
   List<Map<String, dynamic>> _recentActivity = [];
+  String _revenueTrend = '';
+  bool _isTrendPositive = true;
 
   @override
   void initState() {
@@ -31,22 +33,74 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _fetchStats();
   }
 
+  // Runs a query and returns an empty list instead of throwing on failure.
+  Future<List> _safe(Future<dynamic> query) async {
+    try {
+      return List.from(await query);
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> _fetchStats() async {
     setState(() => _isLoading = true);
     try {
-      final analyticsData = await supabase
-          .from('admin_analytics')
-          .select()
-          .maybeSingle();
-      final subsList = await supabase
-          .from('subscriptions')
-          .select('end_date')
-          .neq('status', 'cancelled');
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1).toIso8601String();
+      final todayStart = DateTime(now.year, now.month, now.day).toIso8601String();
+      final lastMonthStart = DateTime(now.year, now.month - 1, 1).toIso8601String();
+
+      // All queries run in parallel; each is individually fault-tolerant.
+      final results = await Future.wait([
+        _safe(supabase.from('subscriptions').select('id').eq('status', 'active')),
+        _safe(supabase.from('payments').select('amount').gte('created_at', monthStart)),
+        _safe(supabase.from('payments').select('amount').gte('created_at', lastMonthStart).lt('created_at', monthStart)),
+        _safe(supabase.from('subscriptions').select('id').gte('created_at', todayStart)),
+        _safe(supabase.from('classes').select('id').gt('start_time', now.toIso8601String())),
+        _safe(supabase.from('subscriptions').select('end_date').neq('status', 'cancelled')),
+        // Recent activity — included here so a failure above can't block them
+        _safe(supabase
+            .from('check_ins')
+            .select('checked_in_at, profiles(full_name)')
+            .order('checked_in_at', ascending: false)
+            .limit(10)),
+        _safe(supabase
+            .from('subscriptions')
+            .select('created_at, profiles(full_name), gym_passes(name)')
+            .order('created_at', ascending: false)
+            .limit(10)),
+      ]);
+
+      final activeMembers = (results[0]).length;
+      final paymentsThisMonth = results[1];
+      final revenueThisMonth = paymentsThisMonth.fold<double>(
+        0.0, (sum, p) => sum + (((p as Map)['amount'] as num?)?.toDouble() ?? 0.0),
+      );
+      final paymentsLastMonth = results[2];
+      final revenueLastMonth = paymentsLastMonth.fold<double>(
+        0.0, (sum, p) => sum + (((p as Map)['amount'] as num?)?.toDouble() ?? 0.0),
+      );
+      final newMembersToday = (results[3]).length;
+      final upcomingClasses = (results[4]).length;
+      final subsList = results[5];
+      final recentCheckIns = results[6];
+      final recentSubs = results[7];
+
+      // Compute month-over-month trend
+      String trendLabel = '';
+      bool trendPositive = true;
+      if (revenueLastMonth > 0) {
+        final pct = ((revenueThisMonth - revenueLastMonth) / revenueLastMonth * 100).round();
+        trendPositive = pct >= 0;
+        trendLabel = '${trendPositive ? '+' : ''}$pct% vs last month';
+      } else if (revenueThisMonth > 0) {
+        trendLabel = 'New this month';
+      }
 
       final today = DateTime.now();
       int expired = 0, critical = 0, expiring = 0;
       for (final sub in subsList) {
-        final endDateStr = sub['end_date'] as String?;
+        final endDateStr = (sub as Map)['end_date'] as String?;
         if (endDateStr == null) continue;
         final endDate = DateTime.tryParse(endDateStr);
         if (endDate == null) continue;
@@ -60,20 +114,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         }
       }
 
-      final recentCheckIns = await supabase
-          .from('check_ins')
-          .select('checked_in_at, profiles(full_name)')
-          .order('checked_in_at', ascending: false)
-          .limit(8);
-
-      final recentSubs = await supabase
-          .from('subscriptions')
-          .select('created_at, profiles(full_name), gym_passes(name)')
-          .order('created_at', ascending: false)
-          .limit(8);
-
       final List<Map<String, dynamic>> activity = [];
-      for (final ci in recentCheckIns) {
+      for (final raw in recentCheckIns) {
+        final ci = raw as Map<String, dynamic>;
         final profile = ci['profiles'] as Map<String, dynamic>?;
         final name = profile?['full_name'] as String? ?? 'A member';
         final createdAt = DateTime.tryParse(ci['checked_in_at'] as String? ?? '');
@@ -86,7 +129,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           'color': AppColors.brand,
         });
       }
-      for (final sub in recentSubs) {
+      for (final raw in recentSubs) {
+        final sub = raw as Map<String, dynamic>;
         final profile = sub['profiles'] as Map<String, dynamic>?;
         final pass = sub['gym_passes'] as Map<String, dynamic>?;
         final name = profile?['full_name'] as String? ?? 'A member';
@@ -106,16 +150,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         final tb = b['time'] as DateTime;
         return tb.compareTo(ta);
       });
-      if (activity.length > 8) activity.length = 8;
+      if (activity.length > 10) activity.length = 10;
 
       if (mounted) {
         setState(() {
-          _stats = analyticsData ?? {
-            'total_active_members': 0,
-            'revenue_this_month': 0,
-            'upcoming_classes': 0,
-            'new_members_today': 0,
+          _stats = {
+            'total_active_members': activeMembers,
+            'revenue_this_month': revenueThisMonth.round(),
+            'upcoming_classes': upcomingClasses,
+            'new_members_today': newMembersToday,
           };
+          _revenueTrend = trendLabel;
+          _isTrendPositive = trendPositive;
           _expiredCount = expired;
           _criticalCount = critical;
           _expiringCount = expiring;
@@ -140,92 +186,169 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _showManualCheckInDialog(BuildContext context) {
-    final TextEditingController searchController = TextEditingController();
+    final searchController = TextEditingController();
+    List<Map<String, dynamic>> matches = [];
+    bool isSearching = false;
     bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: context.card,
-              title: Text('Manual Check-In', style: AppStyles.displayFont.copyWith(fontSize: 20, color: context.fg)),
-              content: Column(
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> search() async {
+            final q = searchController.text.trim();
+            if (q.isEmpty) {
+              setDialogState(() => matches = []);
+              return;
+            }
+            setDialogState(() => isSearching = true);
+            try {
+              final res = await supabase
+                  .from('profiles')
+                  .select('id, full_name, phone')
+                  .ilike('full_name', '%$q%')
+                  .limit(8);
+              setDialogState(() {
+                matches = List<Map<String, dynamic>>.from(res);
+                isSearching = false;
+              });
+            } catch (_) {
+              setDialogState(() => isSearching = false);
+            }
+          }
+
+          Future<void> checkIn(Map<String, dynamic> member) async {
+            setDialogState(() => isSubmitting = true);
+            try {
+              await supabase.from('check_ins').insert({'user_id': member['id']});
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text('Checked in ${member['full_name']}!'),
+                    backgroundColor: AppColors.brand,
+                  ),
+                );
+                _fetchStats();
+              }
+            } catch (e) {
+              setDialogState(() => isSubmitting = false);
+              if (!ctx.mounted) return;
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(
+                  content: Text('Check-in failed. Please try again.'),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: context.card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              'Manual Check-In',
+              style: AppStyles.displayFont.copyWith(fontSize: 20, color: context.fg),
+            ),
+            content: SizedBox(
+              width: 340,
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Enter Member Name:', style: AppStyles.eyebrow.copyWith(color: context.mutedFg)),
-                  SizedBox(height: 8),
                   TextField(
                     controller: searchController,
+                    autofocus: true,
+                    onChanged: (_) => search(),
                     style: AppStyles.bodyFont.copyWith(color: context.fg),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: context.bg,
-                      hintText: 'e.g. Mara Voss',
+                      hintText: 'Search by name…',
                       hintStyle: AppStyles.bodyFont.copyWith(color: context.mutedFg),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      prefixIcon: isSearching
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brand),
+                              ),
+                            )
+                          : const Icon(Icons.search, color: AppColors.brand),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.brand),
+                      ),
                     ),
                   ),
+                  if (matches.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      '${matches.length} match${matches.length == 1 ? '' : 'es'} — tap to check in',
+                      style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: 9),
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: matches.length,
+                        separatorBuilder: (context, i) => Divider(height: 1, color: context.border),
+                        itemBuilder: (_, i) {
+                          final m = matches[i];
+                          final name = m['full_name'] as String? ?? '—';
+                          final phone = m['phone'] as String? ?? '';
+                          return ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            leading: CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppColors.brand.withValues(alpha: 0.12),
+                              child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: AppStyles.bodyFont.copyWith(
+                                  color: AppColors.brand,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            title: Text(name, style: AppStyles.bodyFont.copyWith(fontWeight: FontWeight.w600, fontSize: 14, color: context.fg)),
+                            subtitle: phone.isNotEmpty
+                                ? Text(phone, style: AppStyles.bodyFont.copyWith(fontSize: 12, color: context.mutedFg))
+                                : null,
+                            trailing: isSubmitting
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brand))
+                                : const Icon(Icons.check_circle_outline, color: AppColors.brand, size: 20),
+                            onTap: isSubmitting ? null : () => checkIn(m),
+                          );
+                        },
+                      ),
+                    ),
+                  ] else if (searchController.text.isNotEmpty && !isSearching) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Text(
+                        'No members found.',
+                        style: AppStyles.bodyFont.copyWith(color: context.mutedFg),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancel', style: TextStyle(color: context.mutedFg)),
-                ),
-                ElevatedButton(
-                  onPressed: isSubmitting ? null : () async {
-                    if (searchController.text.trim().isEmpty) return;
-                    setDialogState(() => isSubmitting = true);
-                    try {
-                      final query = searchController.text.trim();
-                      final response = await supabase
-                          .from('profiles')
-                          .select('id, full_name')
-                          .ilike('full_name', '%$query%')
-                          .limit(1)
-                          .maybeSingle();
-
-                      if (response != null) {
-                        await supabase.from('check_ins').insert({'user_id': response['id']});
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Checked in ${response['full_name']}!'), backgroundColor: AppColors.brand),
-                          );
-                        }
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Member not found.'), backgroundColor: AppColors.energy),
-                          );
-                        }
-                        setDialogState(() => isSubmitting = false);
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Check-in failed. Please try again.'),
-                            backgroundColor: Colors.redAccent,
-                          ),
-                        );
-                      }
-                      setDialogState(() => isSubmitting = false);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
-                  child: isSubmitting 
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Check In', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: TextStyle(color: context.mutedFg)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -242,9 +365,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final upcomingClasses = _stats?['upcoming_classes'] ?? 0;
     final newMembers = _stats?['new_members_today'] ?? 0;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(horizontal: context.w(AppStyles.containerPadding)),
-      child: Column(
+    return RefreshIndicator(
+      color: AppColors.brand,
+      onRefresh: _fetchStats,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.symmetric(horizontal: context.w(AppStyles.containerPadding)),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: context.h(8)),
@@ -260,8 +387,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             context,
             title: 'REVENUE THIS MONTH',
             value: currencyFormatter.format(revenue),
-            trend: '+12.5%',
-            isPositive: true,
+            trend: _revenueTrend,
+            isPositive: _isTrendPositive,
           ),
           SizedBox(height: context.h(12)),
           Row(
@@ -323,6 +450,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           SizedBox(height: context.h(120)), // Bottom padding for nav bar
         ],
       ),
+    ),
     );
   }
 
@@ -427,23 +555,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final now = DateTime.now();
     final formattedDate = DateFormat('EEEE, MMMM d').format(now);
 
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          formattedDate.toUpperCase(),
-          style: AppStyles.eyebrow.copyWith(
-            color: AppColors.brand,
-            letterSpacing: 2,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                formattedDate.toUpperCase(),
+                style: AppStyles.eyebrow.copyWith(
+                  color: AppColors.brand,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: context.h(4)),
+              Text(
+                'Dashboard',
+                style: AppStyles.displayFont.copyWith(
+                  fontSize: context.sp(32),
+                  fontWeight: FontWeight.bold,
+                  color: context.fg,
+                ),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: context.h(4)),
-        Text(
-          'Dashboard',
-          style: AppStyles.displayFont.copyWith(
-            fontSize: context.sp(32),
-            fontWeight: FontWeight.bold,
-            color: context.fg,
+        GestureDetector(
+          onTap: _fetchStats,
+          child: Container(
+            padding: EdgeInsets.all(context.r(8)),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: context.border),
+            ),
+            child: Icon(
+              Icons.refresh,
+              size: context.r(18),
+              color: context.mutedFg,
+            ),
           ),
         ),
       ],
@@ -487,6 +637,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ],
               ),
+              if (trend.isNotEmpty)
               Container(
                 padding: EdgeInsets.symmetric(horizontal: context.w(8), vertical: context.h(4)),
                 decoration: BoxDecoration(
