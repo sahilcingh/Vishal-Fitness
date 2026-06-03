@@ -23,18 +23,50 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
   final Set<String> _expandedIds = {};
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  String? _selectedPassType; // null = All
+
+  /// Unique pass type names extracted from loaded subscriptions.
+  List<String> get _passTypes {
+    final seen = <String>{};
+    final types = <String>[];
+    for (final sub in _subscriptions) {
+      final pass = sub['gym_passes'] as Map<String, dynamic>?;
+      final name = pass?['name'] as String?;
+      if (name != null && seen.add(name)) types.add(name);
+    }
+    types.sort();
+    return types;
+  }
 
   List<Map<String, dynamic>> get _filteredSubs {
-    if (_searchQuery.isEmpty) return _subscriptions;
-    return _subscriptions.where((sub) {
+    var list = _subscriptions.where((sub) {
       final profile = sub['profiles'] ?? {};
       final name = (profile['full_name'] as String? ?? '').toLowerCase();
       final phone = (profile['phone'] as String? ?? '').toLowerCase();
       final memberNo = _membershipNo(sub['user_id'] as String).toLowerCase();
-      return name.contains(_searchQuery) ||
+      final matchesSearch = _searchQuery.isEmpty ||
+          name.contains(_searchQuery) ||
           phone.contains(_searchQuery) ||
           memberNo.contains(_searchQuery);
+      if (!matchesSearch) return false;
+
+      // Membership type filter
+      if (_selectedPassType != null) {
+        final pass = sub['gym_passes'] as Map<String, dynamic>?;
+        final passName = pass?['name'] as String?;
+        if (passName != _selectedPassType) return false;
+      }
+      return true;
     }).toList();
+
+    // Sort alphabetically by member name (A → Z)
+    list.sort((a, b) {
+      final nameA = ((a['profiles'] as Map<String, dynamic>?)?['full_name'] as String? ?? '').toLowerCase();
+      final nameB = ((b['profiles'] as Map<String, dynamic>?)?['full_name'] as String? ?? '').toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
+    return list;
   }
 
   @override
@@ -314,13 +346,49 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     ),
                   ),
                 ),
+                // ── Membership type filter chips ──────────────────────────
+                if (_passTypes.isNotEmpty)
+                  SizedBox(
+                    height: context.h(42),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(
+                          horizontal: context.w(AppStyles.containerPadding),
+                          vertical: context.h(4)),
+                      children: [
+                        // "All" chip
+                        _filterChip(
+                          context,
+                          label: 'All',
+                          count: _subscriptions.length,
+                          isSelected: _selectedPassType == null,
+                          onTap: () => setState(() => _selectedPassType = null),
+                        ),
+                        ..._passTypes.map((type) {
+                          final count = _subscriptions.where((s) {
+                            final p = s['gym_passes'] as Map<String, dynamic>?;
+                            return p?['name'] == type;
+                          }).length;
+                          return _filterChip(
+                            context,
+                            label: type,
+                            count: count,
+                            isSelected: _selectedPassType == type,
+                            onTap: () => setState(() =>
+                                _selectedPassType =
+                                    _selectedPassType == type ? null : type),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: _filteredSubs.isEmpty
                       ? Center(
                           child: Text(
-                            _searchQuery.isEmpty
+                            _searchQuery.isEmpty && _selectedPassType == null
                                 ? 'No subscriptions found.'
-                                : 'No results for "$_searchQuery".',
+                                : 'No results for "${_selectedPassType ?? _searchQuery}".',
                             style:
                                 AppStyles.bodyFont.copyWith(color: context.mutedFg),
                           ),
@@ -472,6 +540,39 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                 ),
                                               ],
                                             ),
+                                            // Pass type pill
+                                            if ((pass['name'] as String?) != null) ...[
+                                              SizedBox(height: context.h(4)),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: context.w(6),
+                                                  vertical: context.h(2),
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: (isExpired
+                                                          ? AppColors.energy
+                                                          : AppColors.aqua)
+                                                      .withValues(alpha: 0.10),
+                                                  borderRadius: BorderRadius.circular(context.r(5)),
+                                                  border: Border.all(
+                                                    color: (isExpired
+                                                            ? AppColors.energy
+                                                            : AppColors.aqua)
+                                                        .withValues(alpha: 0.25),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  pass['name'] as String,
+                                                  style: AppStyles.eyebrow.copyWith(
+                                                    fontSize: context.sp(8),
+                                                    fontWeight: FontWeight.w800,
+                                                    color: isExpired
+                                                        ? AppColors.energy
+                                                        : AppColors.aqua,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ),
@@ -797,6 +898,67 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                   ),
                 ],
               ),
+    );
+  }
+
+  Widget _filterChip(
+    BuildContext context, {
+    required String label,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        margin: EdgeInsets.only(right: context.w(8)),
+        padding: EdgeInsets.symmetric(
+            horizontal: context.w(12), vertical: context.h(5)),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brand
+              : context.card,
+          borderRadius: BorderRadius.circular(context.r(20)),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.brand
+                : context.border.withValues(alpha: 0.7),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: AppStyles.bodyFont.copyWith(
+                fontSize: context.sp(11),
+                fontWeight: FontWeight.w700,
+                color: isSelected ? Colors.black : context.fg,
+              ),
+            ),
+            SizedBox(width: context.w(5)),
+            Container(
+              padding: EdgeInsets.symmetric(
+                  horizontal: context.w(5), vertical: context.h(1)),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.black.withValues(alpha: 0.15)
+                    : AppColors.brand.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(context.r(10)),
+              ),
+              child: Text(
+                '$count',
+                style: AppStyles.numTabular.copyWith(
+                  fontSize: context.sp(9),
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.black : AppColors.brand,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
