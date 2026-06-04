@@ -2,6 +2,7 @@
 // Always use responsive utilities (context.w, context.h, context.sp, context.r)
 // to ensure the app remains dynamic across all device sizes.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
@@ -24,6 +25,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   String? _selectedPassType; // null = All
+  // Cache: userId → login email
+  final Map<String, String?> _memberEmails = {};
+  // Cache: userId → reset in-progress
+  final Set<String> _resettingPassword = {};
 
   /// Unique pass type names extracted from loaded subscriptions.
   List<String> get _passTypes {
@@ -126,6 +131,188 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _fetchMemberEmail(String userId, String? phone) async {
+    if (_memberEmails.containsKey(userId)) return; // already cached
+    if (phone == null || phone.isEmpty) {
+      setState(() => _memberEmails[userId] = null);
+      return;
+    }
+    try {
+      final email = await supabase.rpc(
+        'get_email_by_phone',
+        params: {'phone_input': phone.replaceAll(RegExp(r'[^0-9]'), '')},
+      ) as String?;
+      if (mounted) setState(() => _memberEmails[userId] = email);
+    } catch (_) {
+      if (mounted) setState(() => _memberEmails[userId] = null);
+    }
+  }
+
+  Future<void> _resetMemberPassword(String userId, String memberName) async {
+    setState(() => _resettingPassword.add(userId));
+    try {
+      final res = await supabase.functions.invoke(
+        'reset-member-password',
+        body: {'user_id': userId},
+      );
+      final data = res.data as Map<String, dynamic>?;
+      if (!mounted) return;
+      if (data?['success'] == true) {
+        final newPass = data!['temp_password'] as String;
+        _showNewCredentialsDialog(memberName,
+            _memberEmails[userId] ?? '—', newPass);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data?['error'] as String? ??
+                'Reset failed. Deploy the reset-member-password Edge Function first.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Reset failed. Make sure the reset-member-password Edge Function is deployed.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _resettingPassword.remove(userId));
+    }
+  }
+
+  void _showNewCredentialsDialog(String name, String email, String password) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.brand.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.key, color: AppColors.brand, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('New Credentials',
+                  style: AppStyles.displayFont.copyWith(
+                      fontSize: context.sp(18),
+                      fontWeight: FontWeight.bold,
+                      color: ctx.fg)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Share these with $name:',
+                style: AppStyles.bodyFont
+                    .copyWith(color: ctx.mutedFg, fontSize: context.sp(13))),
+            const SizedBox(height: 16),
+            _credTile(ctx, 'LOGIN EMAIL', email),
+            const SizedBox(height: 10),
+            _credTile(ctx, 'NEW PASSWORD', password),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.sun.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.sun.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline,
+                      color: AppColors.sun, size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Member must change this password on first login.',
+                      style: AppStyles.bodyFont.copyWith(
+                          color: AppColors.sun,
+                          fontSize: context.sp(11),
+                          height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _credTile(BuildContext context, String label, String value) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: context.w(12), vertical: context.h(10)),
+      decoration: BoxDecoration(
+        color: context.bg,
+        borderRadius: BorderRadius.circular(context.r(10)),
+        border: Border.all(color: context.border.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: AppStyles.eyebrow.copyWith(
+                        color: context.mutedFg, fontSize: context.sp(9))),
+                const SizedBox(height: 3),
+                Text(value,
+                    style: AppStyles.bodyFont.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: context.sp(13),
+                        color: context.fg)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Copied to clipboard'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: Icon(Icons.copy_outlined,
+                size: context.r(16), color: context.mutedFg),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _updateStatus(String id, String newStatus) async {
@@ -423,13 +610,18 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                     final passId = sub['pass_id'] as String?;
 
                     return GestureDetector(
-                      onTap: () => setState(() {
-                        if (isExpanded) {
-                          _expandedIds.remove(id);
-                        } else {
-                          _expandedIds.add(id);
-                        }
-                      }),
+                      onTap: () {
+                        setState(() {
+                          if (isExpanded) {
+                            _expandedIds.remove(id);
+                          } else {
+                            _expandedIds.add(id);
+                            // Fetch email when expanding for the first time
+                            final phone = profile['phone'] as String?;
+                            _fetchMemberEmail(sub['user_id'] as String, phone);
+                          }
+                        });
+                      },
                       child: Container(
                         margin: EdgeInsets.only(bottom: context.h(10)),
                         decoration: BoxDecoration(
@@ -807,6 +999,168 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                         shape: RoundedRectangleBorder(
                                                           borderRadius:
                                                               BorderRadius.circular(context.r(8)),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              SizedBox(height: context.h(14)),
+                                              // ── Login Credentials ──────
+                                              Container(
+                                                padding: EdgeInsets.all(context.r(12)),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.brand.withValues(alpha: 0.04),
+                                                  borderRadius: BorderRadius.circular(context.r(12)),
+                                                  border: Border.all(
+                                                      color: AppColors.brand.withValues(alpha: 0.2)),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.key_outlined,
+                                                            size: context.r(13),
+                                                            color: AppColors.brand),
+                                                        SizedBox(width: context.w(6)),
+                                                        Text('LOGIN CREDENTIALS',
+                                                            style: AppStyles.eyebrow.copyWith(
+                                                                color: AppColors.brand,
+                                                                fontSize: context.sp(9),
+                                                                fontWeight: FontWeight.w800)),
+                                                      ],
+                                                    ),
+                                                    SizedBox(height: context.h(10)),
+                                                    // Email row
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text('EMAIL',
+                                                                  style: AppStyles.eyebrow.copyWith(
+                                                                      color: context.mutedFg,
+                                                                      fontSize: context.sp(8))),
+                                                              SizedBox(height: context.h(2)),
+                                                              _memberEmails
+                                                                      .containsKey(
+                                                                          sub['user_id'])
+                                                                  ? Text(
+                                                                      _memberEmails[
+                                                                              sub['user_id']] ??
+                                                                          'Not found',
+                                                                      style:
+                                                                          AppStyles.bodyFont.copyWith(
+                                                                        fontSize: context.sp(12),
+                                                                        fontWeight: FontWeight.w600,
+                                                                        color: context.fg,
+                                                                      ),
+                                                                    )
+                                                                  : Row(
+                                                                      children: [
+                                                                        SizedBox(
+                                                                          width: context.r(12),
+                                                                          height: context.r(12),
+                                                                          child:
+                                                                              CircularProgressIndicator(
+                                                                                  strokeWidth: 1.5,
+                                                                                  color: AppColors
+                                                                                      .brand),
+                                                                        ),
+                                                                        SizedBox(
+                                                                            width: context.w(6)),
+                                                                        Text('Loading…',
+                                                                            style: AppStyles.bodyFont
+                                                                                .copyWith(
+                                                                                    color: context
+                                                                                        .mutedFg,
+                                                                                    fontSize:
+                                                                                        context
+                                                                                            .sp(12))),
+                                                                      ],
+                                                                    ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        if (_memberEmails[sub['user_id']] != null)
+                                                          GestureDetector(
+                                                            onTap: () {
+                                                              Clipboard.setData(ClipboardData(
+                                                                  text: _memberEmails[
+                                                                          sub['user_id']]!));
+                                                              ScaffoldMessenger.of(context)
+                                                                  .showSnackBar(const SnackBar(
+                                                                content:
+                                                                    Text('Email copied'),
+                                                                duration: Duration(seconds: 1),
+                                                                behavior:
+                                                                    SnackBarBehavior.floating,
+                                                              ));
+                                                            },
+                                                            child: Container(
+                                                              padding: EdgeInsets.all(
+                                                                  context.r(6)),
+                                                              decoration: BoxDecoration(
+                                                                color: context.card,
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                        context.r(6)),
+                                                                border: Border.all(
+                                                                    color: context.border),
+                                                              ),
+                                                              child: Icon(
+                                                                  Icons.copy_outlined,
+                                                                  size: context.r(14),
+                                                                  color: context.mutedFg),
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    SizedBox(height: context.h(10)),
+                                                    // Reset password button
+                                                    SizedBox(
+                                                      width: double.infinity,
+                                                      child: OutlinedButton.icon(
+                                                        onPressed: _resettingPassword
+                                                                .contains(sub['user_id'])
+                                                            ? null
+                                                            : () => _resetMemberPassword(
+                                                                sub['user_id'] as String,
+                                                                name),
+                                                        icon: _resettingPassword
+                                                                .contains(sub['user_id'])
+                                                            ? SizedBox(
+                                                                width: context.r(13),
+                                                                height: context.r(13),
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                        strokeWidth: 1.5,
+                                                                        color: AppColors.energy),
+                                                              )
+                                                            : Icon(Icons.lock_reset_outlined,
+                                                                size: context.r(14)),
+                                                        label: Text(
+                                                          _resettingPassword
+                                                                  .contains(sub['user_id'])
+                                                              ? 'Resetting…'
+                                                              : 'Reset Password',
+                                                          style: TextStyle(
+                                                              fontSize: context.sp(12)),
+                                                        ),
+                                                        style: OutlinedButton.styleFrom(
+                                                          foregroundColor: AppColors.energy,
+                                                          side: BorderSide(
+                                                              color: AppColors.energy
+                                                                  .withValues(alpha: 0.5)),
+                                                          padding: EdgeInsets.symmetric(
+                                                              vertical: context.h(8)),
+                                                          shape: RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                      context.r(8))),
                                                         ),
                                                       ),
                                                     ),
