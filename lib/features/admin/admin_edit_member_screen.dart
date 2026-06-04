@@ -48,6 +48,8 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
   bool _isSubmitting = false;
   bool _isLoading = true;
   bool _passesLoading = true;
+  String? _memberEmail;
+  bool _isResettingPassword = false;
 
   @override
   void initState() {
@@ -75,14 +77,16 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
           .eq('id', widget.userId)
           .maybeSingle();
       if (mounted) {
+        final phone = res?['phone'] as String?;
         setState(() {
           _nameController.text = res?['full_name'] as String? ?? '';
-          _phoneController.text = res?['phone'] as String? ?? '';
+          _phoneController.text = phone ?? '';
           _selectedGender = res?['gender'] as String?;
           _timeSlotController.text = res?['time_slot'] as String? ?? '';
           _existingPhotoUrl = res?['photo_url'] as String?;
           _isLoading = false;
         });
+        _fetchMemberEmail(phone);
       }
     } catch (_) {
       // Fallback: optional columns (gender, time_slot, photo_url) may not exist
@@ -119,6 +123,171 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
         }
       }
     }
+  }
+
+  Future<void> _fetchMemberEmail(String? phone) async {
+    if (phone == null || phone.isEmpty) return;
+    try {
+      final email = await supabase.rpc(
+        'get_email_by_phone',
+        params: {'phone_input': phone.replaceAll(RegExp(r'[^0-9]'), '')},
+      ) as String?;
+      if (mounted) setState(() => _memberEmail = email ?? '');
+    } catch (_) {}
+  }
+
+  Future<void> _resetPassword() async {
+    setState(() => _isResettingPassword = true);
+    try {
+      final res = await supabase.functions.invoke(
+        'reset-member-password',
+        body: {'user_id': widget.userId},
+      );
+      final data = res.data as Map<String, dynamic>?;
+      if (!mounted) return;
+      if (data?['success'] == true) {
+        final newPass = data!['temp_password'] as String;
+        _showCredentialsDialog(newPass);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(data?['error'] as String? ??
+              'Deploy the reset-member-password Edge Function first.'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Reset failed. Deploy the Edge Function first.'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _isResettingPassword = false);
+    }
+  }
+
+  void _showCredentialsDialog(String newPassword) {
+    final email = _memberEmail ?? '—';
+    final name = _nameController.text.trim();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.brand.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.key, color: AppColors.brand, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('New Credentials',
+                  style: AppStyles.displayFont.copyWith(
+                      fontSize: context.sp(18),
+                      fontWeight: FontWeight.bold,
+                      color: ctx.fg)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Share these with $name:',
+                style: AppStyles.bodyFont
+                    .copyWith(color: ctx.mutedFg, fontSize: context.sp(13))),
+            SizedBox(height: context.h(16)),
+            _credRow(ctx, 'LOGIN EMAIL', email),
+            SizedBox(height: context.h(10)),
+            _credRow(ctx, 'NEW PASSWORD', newPassword),
+            SizedBox(height: context.h(16)),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.sun.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.sun.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.sun, size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Member must change this password on first login.',
+                        style: AppStyles.bodyFont.copyWith(
+                            color: AppColors.sun,
+                            fontSize: context.sp(11),
+                            height: 1.4)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _credRow(BuildContext ctx, String label, String value) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: context.w(12), vertical: context.h(10)),
+      decoration: BoxDecoration(
+        color: ctx.bg,
+        borderRadius: BorderRadius.circular(context.r(10)),
+        border: Border.all(color: ctx.border.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: AppStyles.eyebrow
+                        .copyWith(color: ctx.mutedFg, fontSize: context.sp(9))),
+                const SizedBox(height: 3),
+                Text(value,
+                    style: AppStyles.bodyFont.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: context.sp(13),
+                        color: ctx.fg)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Copied to clipboard'),
+                duration: Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ));
+            },
+            child: Icon(Icons.copy_outlined,
+                size: context.r(16), color: ctx.mutedFg),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchPasses() async {
@@ -572,7 +741,148 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
                       ],
                     ],
 
-                    SizedBox(height: context.h(36)),
+                    SizedBox(height: context.h(28)),
+
+                    // ── Login Credentials ─────────────────────────
+                    Container(
+                      padding: EdgeInsets.all(context.r(16)),
+                      decoration: BoxDecoration(
+                        color: AppColors.brand.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(context.r(14)),
+                        border: Border.all(
+                            color: AppColors.brand.withValues(alpha: 0.2)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.key_outlined,
+                                  size: context.r(14), color: AppColors.brand),
+                              SizedBox(width: context.w(6)),
+                              Text('LOGIN CREDENTIALS',
+                                  style: AppStyles.eyebrow.copyWith(
+                                      color: AppColors.brand,
+                                      fontSize: context.sp(10),
+                                      fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                          SizedBox(height: context.h(12)),
+                          // Email row
+                          Row(
+                            children: [
+                              Icon(Icons.email_outlined,
+                                  size: context.r(16), color: context.mutedFg),
+                              SizedBox(width: context.w(10)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('LOGIN EMAIL',
+                                        style: AppStyles.eyebrow.copyWith(
+                                            color: context.mutedFg,
+                                            fontSize: context.sp(9))),
+                                    SizedBox(height: context.h(2)),
+                                    _memberEmail == null
+                                        ? Row(children: [
+                                            SizedBox(
+                                              width: context.r(12),
+                                              height: context.r(12),
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 1.5,
+                                                  color: AppColors.brand),
+                                            ),
+                                            SizedBox(width: context.w(6)),
+                                            Text('Loading…',
+                                                style: AppStyles.bodyFont
+                                                    .copyWith(
+                                                        color: context.mutedFg,
+                                                        fontSize:
+                                                            context.sp(13))),
+                                          ])
+                                        : Text(
+                                            _memberEmail!.isEmpty
+                                                ? 'Not found'
+                                                : _memberEmail!,
+                                            style: AppStyles.bodyFont.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: context.sp(13),
+                                                color: context.fg),
+                                          ),
+                                  ],
+                                ),
+                              ),
+                              if (_memberEmail != null &&
+                                  _memberEmail!.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () {
+                                    Clipboard.setData(
+                                        ClipboardData(text: _memberEmail!));
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(const SnackBar(
+                                      content: Text('Email copied'),
+                                      duration: Duration(seconds: 1),
+                                      behavior: SnackBarBehavior.floating,
+                                    ));
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.all(context.r(7)),
+                                    decoration: BoxDecoration(
+                                      color: context.card,
+                                      borderRadius:
+                                          BorderRadius.circular(context.r(8)),
+                                      border:
+                                          Border.all(color: context.border),
+                                    ),
+                                    child: Icon(Icons.copy_outlined,
+                                        size: context.r(15),
+                                        color: context.mutedFg),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          SizedBox(height: context.h(14)),
+                          // Reset password button
+                          SizedBox(
+                            width: double.infinity,
+                            height: context.h(44),
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  _isResettingPassword ? null : _resetPassword,
+                              icon: _isResettingPassword
+                                  ? SizedBox(
+                                      width: context.r(14),
+                                      height: context.r(14),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 1.5,
+                                          color: AppColors.energy),
+                                    )
+                                  : Icon(Icons.lock_reset_outlined,
+                                      size: context.r(16)),
+                              label: Text(
+                                _isResettingPassword
+                                    ? 'Resetting…'
+                                    : 'Reset Password & Show Credentials',
+                                style: AppStyles.bodyFont.copyWith(
+                                    fontSize: context.sp(13),
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.energy,
+                                side: BorderSide(
+                                    color:
+                                        AppColors.energy.withValues(alpha: 0.5)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(context.r(12))),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: context.h(24)),
 
                     // ── Save ──────────────────────────────────────
                     SizedBox(
