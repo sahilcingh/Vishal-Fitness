@@ -35,6 +35,7 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
   final _phoneController = TextEditingController();
   final _timeSlotController = TextEditingController();
   final _extraDaysController = TextEditingController();
+  final _emailController = TextEditingController();
 
   String? _selectedGender;
   Map<String, dynamic>? _selectedPass;
@@ -65,6 +66,7 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
     _phoneController.dispose();
     _timeSlotController.dispose();
     _extraDaysController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -132,7 +134,10 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
         'get_email_by_phone',
         params: {'phone_input': phone.replaceAll(RegExp(r'[^0-9]'), '')},
       ) as String?;
-      if (mounted) setState(() => _memberEmail = email ?? '');
+      if (mounted) {
+        setState(() => _memberEmail = email ?? '');
+        _emailController.text = email ?? '';
+      }
     } catch (_) {}
   }
 
@@ -489,6 +494,30 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
         }).eq('id', widget.subscriptionId);
       }
 
+      // Update email if admin changed it
+      final newEmail = _emailController.text.trim();
+      if (newEmail.isNotEmpty &&
+          newEmail != _memberEmail &&
+          newEmail.contains('@')) {
+        try {
+          await supabase.functions.invoke(
+            'reset-member-password',
+            body: {'user_id': widget.userId, 'new_email': newEmail},
+          );
+          if (mounted) setState(() => _memberEmail = newEmail);
+        } catch (_) {
+          // Email update failed — inform admin but don't block the rest of save
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Profile saved but email update requires the reset-member-password Edge Function.'),
+              backgroundColor: AppColors.energy,
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -646,6 +675,35 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
                       hint: 'e.g. 6:00 AM - 8:00 AM',
                       icon: Icons.schedule_outlined,
                     ),
+                    SizedBox(height: context.h(12)),
+                    _buildField(
+                      controller: _emailController,
+                      label: 'Login Email',
+                      hint: _memberEmail == null
+                          ? 'Loading…'
+                          : 'Member login email',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    if (_memberEmail != null && _emailController.text != _memberEmail)
+                      Padding(
+                        padding: EdgeInsets.only(top: context.h(6)),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                size: context.r(12), color: AppColors.energy),
+                            SizedBox(width: context.w(4)),
+                            Expanded(
+                              child: Text(
+                                'Email will be updated when you save.',
+                                style: AppStyles.eyebrow.copyWith(
+                                    color: AppColors.energy,
+                                    fontSize: context.sp(9)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
                     SizedBox(height: context.h(28)),
 
