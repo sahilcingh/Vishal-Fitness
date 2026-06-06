@@ -34,11 +34,15 @@
 </head>
 <body>
   <script>
-    // Unregister any cached service workers so every deploy is seen immediately.
+    // Disable service workers entirely to prevent stale-cache font/icon issues.
+    // Flutter catches SW registration failures gracefully and continues loading.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         registrations.forEach(function(reg) { reg.unregister(); });
       });
+      navigator.serviceWorker.register = function() {
+        return Promise.reject(new Error('SW disabled'));
+      };
     }
   </script>
   <script src="flutter_bootstrap.js" async></script>
