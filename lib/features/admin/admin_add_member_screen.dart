@@ -179,99 +179,286 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
     if (picked != null) setState(() => _startDate = picked);
   }
 
-  void _showExistingMemberDialog(
-    String existingName, {
-    String? activePassName,
-    String? activeEndDate,
-  }) {
-    final hasActive = activePassName != null;
+  void _showMemberExistsDialog(Map profile, List allSubs) {
+    final memberName = profile['full_name'] as String? ?? _nameController.text.trim();
+    final phone = profile['phone'] as String? ?? _phoneController.text.trim();
+    final now = DateTime.now();
+
+    bool hasActive = false;
+    DateTime? latestEnd;
+
+    for (final rawSub in allSubs) {
+      final sub = rawSub as Map;
+      final status = sub['status'] as String? ?? '';
+      final endDateStr = sub['end_date'] as String?;
+      if (status == 'active' && endDateStr != null) {
+        final endDate = DateTime.parse(endDateStr);
+        if (endDate.isAfter(now)) {
+          hasActive = true;
+          if (latestEnd == null || endDate.isAfter(latestEnd)) {
+            latestEnd = endDate;
+          }
+        }
+      }
+    }
+
+    final daysLeft = latestEnd != null ? latestEnd.difference(now).inDays : 0;
+
+    final String actionLabel;
+    final Color actionColor;
+    DateTime? suggestedStart;
+    final String contextMessage;
+
+    if (allSubs.isEmpty) {
+      actionLabel = 'Add First Pass';
+      actionColor = AppColors.brand;
+      contextMessage = 'No membership history found. Add their first pass below.';
+    } else if (!hasActive) {
+      actionLabel = 'Re-enroll';
+      actionColor = AppColors.brand;
+      contextMessage = 'All previous memberships have expired. Re-enroll them with a new pass.';
+    } else if (daysLeft <= 7) {
+      actionLabel = 'Renew Now';
+      actionColor = AppColors.brand;
+      suggestedStart = latestEnd!.add(const Duration(days: 1));
+      contextMessage = 'Active pass expires in $daysLeft day${daysLeft == 1 ? '' : 's'}. Renewal will start the day after.';
+    } else if (daysLeft <= 30) {
+      actionLabel = 'Schedule Renewal';
+      actionColor = AppColors.sun;
+      suggestedStart = latestEnd!.add(const Duration(days: 1));
+      contextMessage = 'Active pass has $daysLeft days remaining. Schedule a renewal to start after it ends.';
+    } else {
+      actionLabel = 'Add Anyway';
+      actionColor = AppColors.energy;
+      contextMessage = 'Active pass still has $daysLeft days remaining. Adding a new pass this early is unusual — confirm only if intentional.';
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         backgroundColor: ctx.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: (hasActive ? AppColors.energy : AppColors.sun).withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _memberDialogHeader(ctx, memberName, phone),
+              const SizedBox(height: 16),
+              if (allSubs.isNotEmpty) ...[
+                Text(
+                  'SUBSCRIPTION HISTORY',
+                  style: AppStyles.displayFont.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: ctx.mutedFg,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 190),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: allSubs.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    itemBuilder: (_, i) => _subRow(ctx, allSubs[i] as Map, now),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: actionColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: actionColor.withValues(alpha: 0.30)),
+                ),
+                child: Text(
+                  contextMessage,
+                  style: AppStyles.bodyFont.copyWith(
+                    color: actionColor,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
               ),
-              child: Icon(
-                hasActive ? Icons.warning_amber_rounded : Icons.person_outlined,
-                color: hasActive ? AppColors.energy : AppColors.sun,
-                size: 20,
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('Cancel', style: TextStyle(color: ctx.mutedFg)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        if (suggestedStart != null) {
+                          setState(() => _startDate = suggestedStart!);
+                        }
+                        _addSubscriptionToExistingMember();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: actionColor,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(actionLabel),
+                    ),
+                  ),
+                ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _memberDialogHeader(BuildContext ctx, String name, String phone) {
+    final words = name.trim().split(RegExp(r'\s+'));
+    final initials = words
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 24,
+          backgroundColor: AppColors.brand.withValues(alpha: 0.15),
+          child: Text(
+            initials,
+            style: AppStyles.displayFont.copyWith(
+              color: AppColors.brand,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                hasActive ? 'Active Membership Found' : 'Member Already Exists',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
                 style: AppStyles.displayFont.copyWith(
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
                   color: ctx.fg,
                 ),
               ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              hasActive
-                  ? '$existingName already has an active membership that hasn\'t expired yet. Proceed only if you\'re intentionally adding an early renewal.'
-                  : '$existingName already has an account. Add a new membership to their existing account?\n\nThey will keep their current login credentials.',
-              style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 14, height: 1.5),
-            ),
-            if (hasActive) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.energy.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.energy.withValues(alpha: 0.25)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.event_available_outlined, color: AppColors.energy, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '$activePassName  ·  Valid till $activeEndDate',
-                        style: AppStyles.bodyFont.copyWith(
-                          color: AppColors.energy,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 2),
+              Text(
+                phone,
+                style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 13),
               ),
             ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: ctx.mutedFg)),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _addSubscriptionToExistingMember();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: hasActive ? AppColors.energy : AppColors.brand,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.brand.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            'Existing',
+            style: AppStyles.bodyFont.copyWith(
+              color: AppColors.brand,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
-            child: Text(hasActive ? 'Add Anyway' : 'Add Subscription'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _subRow(BuildContext ctx, Map sub, DateTime now) {
+    final passName = (sub['pass'] as Map?)?['name'] as String? ?? 'Pass';
+    final startDateStr = sub['start_date'] as String?;
+    final endDateStr = sub['end_date'] as String?;
+    final status = sub['status'] as String? ?? '';
+
+    Color badgeColor;
+    String badgeLabel;
+
+    if (endDateStr != null) {
+      final endDate = DateTime.parse(endDateStr);
+      if (status == 'active' && endDate.isAfter(now)) {
+        final days = endDate.difference(now).inDays;
+        if (days <= 7) {
+          badgeColor = AppColors.energy;
+          badgeLabel = '${days}d left';
+        } else {
+          badgeColor = AppColors.brand;
+          badgeLabel = 'Active';
+        }
+      } else {
+        badgeColor = Colors.grey;
+        badgeLabel = 'Expired';
+      }
+    } else {
+      badgeColor = Colors.grey;
+      badgeLabel = status.isEmpty ? 'Unknown' : status;
+    }
+
+    final startFormatted = startDateStr != null
+        ? DateFormat('d MMM yy').format(DateTime.parse(startDateStr))
+        : '–';
+    final endFormatted = endDateStr != null
+        ? DateFormat('d MMM yy').format(DateTime.parse(endDateStr))
+        : '–';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: ctx.fg.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  passName,
+                  style: AppStyles.bodyFont.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: ctx.fg,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$startFormatted → $endFormatted',
+                  style: AppStyles.bodyFont.copyWith(color: ctx.mutedFg, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              badgeLabel,
+              style: AppStyles.bodyFont.copyWith(
+                color: badgeColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -794,38 +981,23 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       final phone = _phoneController.text.trim();
       final existingList = await supabase
           .from('profiles')
-          .select('id, full_name')
+          .select('id, full_name, phone')
           .eq('phone', phone)
           .limit(1);
       final existing = existingList.isNotEmpty ? existingList[0] : null;
 
       if (existing != null) {
-        // Member exists — check if they have an unexpired active subscription
-        final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-        final List activeSubs = await supabase
+        final List allSubs = await supabase
             .from('subscriptions')
-            .select('id, end_date, pass:gym_passes(name)')
+            .select('id, start_date, end_date, status, pass:gym_passes(name)')
             .eq('user_id', existing['id'] as String)
-            .eq('status', 'active')
-            .gte('end_date', today)
-            .order('end_date', ascending: false)
-            .limit(1);
+            .neq('status', 'cancelled')
+            .order('created_at', ascending: false)
+            .limit(5);
 
         if (!mounted) return;
         setState(() => _isSubmitting = false);
-
-        final existingName = existing['full_name'] as String? ?? _nameController.text.trim();
-        if (activeSubs.isNotEmpty) {
-          final sub = activeSubs[0] as Map;
-          final passName = (sub['pass'] as Map?)?['name'] as String? ?? 'Current Pass';
-          final endDateStr = sub['end_date'] as String?;
-          final endFormatted = endDateStr != null
-              ? DateFormat('d MMM yyyy').format(DateTime.parse(endDateStr))
-              : 'Unknown date';
-          _showExistingMemberDialog(existingName, activePassName: passName, activeEndDate: endFormatted);
-        } else {
-          _showExistingMemberDialog(existingName);
-        }
+        _showMemberExistsDialog(existing as Map, allSubs);
         return;
       }
 
@@ -858,10 +1030,33 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       if (data == null || data['success'] != true) {
         final msg = data?['error'] as String? ?? 'Unknown error occurred.';
         if (!mounted) return;
-        // Fallback: Edge Function detected duplicate (race condition)
+        // Fallback: Edge Function detected duplicate (race condition).
+        // Re-query with full subscription history to show the rich dialog.
         if (msg.toLowerCase().contains('already been registered') ||
             msg.toLowerCase().contains('already registered')) {
-          _showExistingMemberDialog(_nameController.text.trim());
+          try {
+            final phone = _phoneController.text.trim();
+            final profileList = await supabase
+                .from('profiles')
+                .select('id, full_name, phone')
+                .eq('phone', phone)
+                .limit(1);
+            if (profileList.isNotEmpty && mounted) {
+              final profile = profileList[0] as Map;
+              final allSubs = await supabase
+                  .from('subscriptions')
+                  .select('id, start_date, end_date, status, pass:gym_passes(name)')
+                  .eq('user_id', profile['id'] as String)
+                  .neq('status', 'cancelled')
+                  .order('created_at', ascending: false)
+                  .limit(5);
+              if (mounted) _showMemberExistsDialog(profile, allSubs);
+            } else if (mounted) {
+              _showErrorDialog('This phone number is already registered. Please search for the member to add a pass.');
+            }
+          } catch (_) {
+            if (mounted) _showErrorDialog('This phone number is already registered. Please search for the member to add a pass.');
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $msg'), backgroundColor: Colors.redAccent),
@@ -942,7 +1137,29 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
       if (mounted) {
         final errStr = e.toString().toLowerCase();
         if (errStr.contains('already been registered') || errStr.contains('already registered')) {
-          _showExistingMemberDialog(_nameController.text.trim());
+          try {
+            final phone = _phoneController.text.trim();
+            final profileList = await supabase
+                .from('profiles')
+                .select('id, full_name, phone')
+                .eq('phone', phone)
+                .limit(1);
+            if (profileList.isNotEmpty) {
+              final profile = profileList[0] as Map;
+              final allSubs = await supabase
+                  .from('subscriptions')
+                  .select('id, start_date, end_date, status, pass:gym_passes(name)')
+                  .eq('user_id', profile['id'] as String)
+                  .neq('status', 'cancelled')
+                  .order('created_at', ascending: false)
+                  .limit(5);
+              if (mounted) _showMemberExistsDialog(profile, allSubs);
+            } else if (mounted) {
+              _showErrorDialog('This phone number is already registered. Please search for the member to add a pass.');
+            }
+          } catch (_) {
+            if (mounted) _showErrorDialog('This phone number is already registered. Please search for the member to add a pass.');
+          }
         } else {
           _showErrorDialog('Could not add the member. Please check your connection and try again.');
         }
