@@ -323,12 +323,13 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
   }
 
   Widget _buildFilterChips() {
-    const chips = [
-      (_Filter.all, 'All'),
-      (_Filter.expired, 'Expired'),
-      (_Filter.critical, 'Critical'),
-      (_Filter.expiring, 'Expiring'),
-      (_Filter.healthy, 'Active'),
+    final c = _counts;
+    final chips = [
+      (_Filter.all, 'All', _subs.length),
+      (_Filter.expired, 'Expired', c[_Filter.expired] ?? 0),
+      (_Filter.critical, 'Critical', c[_Filter.critical] ?? 0),
+      (_Filter.expiring, 'Expiring', c[_Filter.expiring] ?? 0),
+      (_Filter.healthy, 'Active', c[_Filter.healthy] ?? 0),
     ];
     final chipColors = {
       _Filter.all: context.mutedFg,
@@ -351,7 +352,7 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 padding: EdgeInsets.symmetric(
-                    horizontal: context.w(16), vertical: context.h(8)),
+                    horizontal: context.w(14), vertical: context.h(8)),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? color.withValues(alpha: 0.15)
@@ -362,14 +363,38 @@ class _AdminExpiryScreenState extends State<AdminExpiryScreen> {
                     width: isSelected ? 1.5 : 1,
                   ),
                 ),
-                child: Text(
-                  chip.$2,
-                  style: AppStyles.bodyFont.copyWith(
-                    fontSize: context.sp(12),
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? color : context.mutedFg,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      chip.$2,
+                      style: AppStyles.bodyFont.copyWith(
+                        fontSize: context.sp(12),
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? color : context.mutedFg,
+                      ),
+                    ),
+                    SizedBox(width: context.w(6)),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: context.w(6), vertical: context.h(2)),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? color.withValues(alpha: 0.20)
+                            : context.mutedFg.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(context.r(10)),
+                      ),
+                      child: Text(
+                        '${chip.$3}',
+                        style: AppStyles.bodyFont.copyWith(
+                          fontSize: context.sp(10),
+                          fontWeight: FontWeight.w700,
+                          color: isSelected ? color : context.mutedFg,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

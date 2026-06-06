@@ -2,6 +2,7 @@
 /// Always use responsive utilities (context.w, context.h, context.sp, context.r) 
 /// to ensure the app remains dynamic across all device sizes.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
@@ -107,6 +108,7 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
                       child: TextField(
                         controller: durationController,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                         decoration: InputDecoration(labelText: 'Days (e.g., 30)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(8)))),
                       ),
                     ),
@@ -114,7 +116,8 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
                     Expanded(
                       child: TextField(
                         controller: priceController,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                         decoration: InputDecoration(labelText: 'Price (₹)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(context.r(8)))),
                       ),
                     ),
@@ -140,7 +143,50 @@ class _AdminPassesScreenState extends State<AdminPassesScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty || durationController.text.isEmpty || priceController.text.isEmpty) return;
+                final duration = int.tryParse(durationController.text.trim());
+                final price = double.tryParse(priceController.text.trim());
+
+                String? inputError;
+                if (nameController.text.trim().isEmpty) {
+                  inputError = 'Please enter a name for this pass.';
+                } else if (duration == null || duration <= 0) {
+                  inputError = 'Duration must be at least 1 day.';
+                } else if (duration > 365) {
+                  inputError = 'Duration cannot exceed 365 days.';
+                } else if (price == null || price <= 0) {
+                  inputError = 'Price must be greater than ₹0.';
+                } else if (price > 100000) {
+                  inputError = 'Price cannot exceed ₹1,00,000. Please verify the amount.';
+                }
+
+                if (inputError != null) {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: context.card,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.r(16))),
+                      title: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.redAccent, size: context.r(22)),
+                          SizedBox(width: context.w(8)),
+                          Text('Invalid Input',
+                              style: AppStyles.displayFont.copyWith(
+                                  fontSize: context.sp(16), fontWeight: FontWeight.bold, color: context.fg)),
+                        ],
+                      ),
+                      content: Text(inputError!,
+                          style: AppStyles.bodyFont.copyWith(fontSize: context.sp(13), color: context.fg)),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
+                          child: const Text('OK', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
 
                 final featuresArray = featuresController.text
                     .split('\n')

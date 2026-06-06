@@ -423,6 +423,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
               TextField(
                 controller: controller,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                 autofocus: true,
                 decoration: InputDecoration(
                   labelText: isPercent ? 'Discount %' : 'Discount Amount',
@@ -449,9 +450,43 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                final val = double.tryParse(controller.text.trim()) ?? 0;
-                final discountAmt = isPercent ? (passPrice * val / 100) : val;
-                _setDiscount(subscriptionId, discountAmt.clamp(0, passPrice));
+                final val = double.tryParse(controller.text.trim());
+                String? discountError;
+                if (val == null || val < 0) {
+                  discountError = 'Please enter a valid discount value.';
+                } else if (isPercent && val > 100) {
+                  discountError = 'Discount percentage cannot exceed 100%.';
+                } else if (!isPercent && val > passPrice) {
+                  discountError = 'Discount (₹${val.toStringAsFixed(0)}) cannot exceed the pass price (₹${passPrice.toStringAsFixed(0)}).';
+                }
+                if (discountError != null) {
+                  showDialog(
+                    context: ctx,
+                    builder: (c) => AlertDialog(
+                      backgroundColor: c.card,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(c.r(16))),
+                      title: Row(children: [
+                        Icon(Icons.error_outline, color: Colors.redAccent, size: c.r(22)),
+                        SizedBox(width: c.w(8)),
+                        Text('Invalid Discount',
+                            style: AppStyles.displayFont.copyWith(
+                                fontSize: c.sp(16), fontWeight: FontWeight.bold, color: c.fg)),
+                      ]),
+                      content: Text(discountError!,
+                          style: AppStyles.bodyFont.copyWith(fontSize: c.sp(13), color: c.fg)),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(c),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
+                          child: const Text('OK', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
+                final discountAmt = isPercent ? (passPrice * val! / 100) : val!;
+                _setDiscount(subscriptionId, discountAmt);
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(
@@ -1445,7 +1480,33 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
 
   Future<void> _recordPayment() async {
     final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) return;
+    if (amount == null || amount <= 0) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ctx.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ctx.r(16))),
+          title: Row(children: [
+            Icon(Icons.error_outline, color: Colors.redAccent, size: ctx.r(22)),
+            SizedBox(width: ctx.w(8)),
+            Text('Invalid Amount',
+                style: AppStyles.displayFont.copyWith(
+                    fontSize: ctx.sp(16), fontWeight: FontWeight.bold, color: ctx.fg)),
+          ]),
+          content: Text('Please enter a payment amount greater than ₹0.',
+              style: AppStyles.bodyFont.copyWith(fontSize: ctx.sp(13), color: ctx.fg)),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand),
+              child: const Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     final pass = widget.subscription['gym_passes'] ?? {};
     final passPrice = (pass['price'] as num?)?.toDouble() ?? 0.0;
@@ -1713,7 +1774,8 @@ class _PaymentsSheetState extends State<_PaymentsSheet> {
                             Expanded(
                               child: TextField(
                                 controller: _amountController,
-                                keyboardType: TextInputType.number,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                                 decoration: InputDecoration(
                                   labelText: 'Amount (₹)',
                                   prefixText: '₹ ',

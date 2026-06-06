@@ -1622,6 +1622,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       hint: _isPercent ? 'e.g. 10' : 'e.g. 200',
                       icon: Icons.local_offer_outlined,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                       onChanged: (_) => setState(() {}),
                     ),
 
@@ -1659,6 +1660,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
                       hint: 'e.g. 1500',
                       icon: Icons.payments_outlined,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                       onChanged: (_) => setState(() {}),
                     ),
                     SizedBox(height: context.h(12)),
