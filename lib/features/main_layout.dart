@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme/app_colors.dart';
@@ -356,7 +355,8 @@ class _MainLayoutState extends State<MainLayout> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'VISHAL FITNESS',
-                      style: GoogleFonts.anton(
+                      style: TextStyle(
+                        fontFamily: 'Anton',
                         color: context.isDark ? Colors.white : Colors.black,
                         fontSize: 28,
                         letterSpacing: 2.0,

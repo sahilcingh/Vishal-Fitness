@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppStyles {
   // --- Layout & Shape ---
@@ -9,26 +8,26 @@ class AppStyles {
   static const double containerPadding = 20.0;
 
   // --- Typography Getters ---
+  // Fonts are bundled locally in assets/fonts/ — no CDN dependency.
   static TextStyle get displayFont =>
-      GoogleFonts.spaceGrotesk(letterSpacing: -0.02 * 16);
+      const TextStyle(fontFamily: 'SpaceGrotesk', letterSpacing: -0.32);
 
-  // FIX applied here: Removed const from the list, used const FontFeature()
-  static TextStyle get bodyFont => GoogleFonts.inter(
-    fontFeatures: [
-      const FontFeature('cv11'),
-      const FontFeature('ss01'),
-      const FontFeature('ss03'),
-    ],
-  );
+  static TextStyle get bodyFont => const TextStyle(
+        fontFamily: 'Inter',
+        fontFeatures: [
+          FontFeature('cv11'),
+          FontFeature('ss01'),
+          FontFeature('ss03'),
+        ],
+      );
 
   // --- Specific Text Treatments ---
   static TextStyle get eyebrow => bodyFont.copyWith(
-    fontSize: 10,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 2.2,
-  );
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 2.2,
+      );
 
-  // FIX applied here: Removed const from the list
   static TextStyle get numTabular =>
       bodyFont.copyWith(fontFeatures: [const FontFeature.tabularFigures()]);
 }

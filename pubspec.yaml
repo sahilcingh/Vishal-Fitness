@@ -46,6 +46,23 @@ flutter:
     - assets/vishal/signin_bg.jpg
     - assets/vishal/get_pass_bg.jpg
 
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter/InterVariable.ttf
+        - asset: assets/fonts/Inter/InterVariable-Italic.ttf
+          style: italic
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Regular.otf
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Medium.otf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk/SpaceGrotesk-Bold.otf
+          weight: 700
+    - family: Anton
+      fonts:
+        - asset: assets/fonts/Anton/Anton-Regular.ttf
+
 
 flutter_launcher_icons:
   android: "launcher_icon"

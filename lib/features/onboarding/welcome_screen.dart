@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
@@ -465,7 +464,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'VISHAL FITNESS',
-                    style: GoogleFonts.anton(
+                    style: TextStyle(
+                      fontFamily: 'Anton',
                       color: context.isDark ? Colors.white : Colors.black,
                       fontSize: 28,
                       letterSpacing: 2.0,
