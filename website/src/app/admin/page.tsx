@@ -1,4 +1,4 @@
-import { UserPlus, RefreshCw, TrendingUp, TrendingDown, Users, CalendarClock, Bell } from "lucide-react";
+import { UserPlus, RefreshCw, TrendingUp, TrendingDown, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/format";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
@@ -38,8 +38,6 @@ export default async function OverviewPage() {
     newToday,
     upcomingClassesRows,
     allActiveSubEndDates,
-    recentCheckIns,
-    recentSubs,
     paymentsLast14Days,
   ] = await Promise.all([
     safeSelect<{ id: string }>(supabase.from("subscriptions").select("id").eq("status", "active")),
@@ -59,28 +57,6 @@ export default async function OverviewPage() {
     safeSelect<{ id: string }>(supabase.from("classes").select("id").gt("start_time", now.toISOString())),
     safeSelect<{ end_date: string }>(
       supabase.from("subscriptions").select("end_date").neq("status", "cancelled"),
-    ),
-    safeSelect(
-      supabase
-        .from("check_ins")
-        .select("checked_in_at, profiles(full_name)")
-        .order("checked_in_at", { ascending: false })
-        .limit(10)
-        .returns<{ checked_in_at: string; profiles: { full_name: string | null } | null }[]>(),
-    ),
-    safeSelect(
-      supabase
-        .from("subscriptions")
-        .select("created_at, profiles(full_name), gym_passes(name)")
-        .order("created_at", { ascending: false })
-        .limit(10)
-        .returns<
-          {
-            created_at: string;
-            profiles: { full_name: string | null } | null;
-            gym_passes: { name: string | null } | null;
-          }[]
-        >(),
     ),
     safeSelect<{ amount: number; payment_date: string }>(
       supabase
@@ -117,36 +93,6 @@ export default async function OverviewPage() {
     else if (days <= 7) critical++;
     else if (days <= 30) expiring++;
   }
-
-  type Activity = { title: string; subtitle: string; time: Date; kind: "checkin" | "sub" };
-  const activity: Activity[] = [
-    ...recentCheckIns.flatMap((c) => {
-      const t = c.checked_in_at ? new Date(c.checked_in_at) : null;
-      if (!t) return [];
-      return [
-        {
-          title: `${c.profiles?.full_name ?? "A member"} checked in`,
-          subtitle: "Gym visit recorded",
-          time: t,
-          kind: "checkin" as const,
-        },
-      ];
-    }),
-    ...recentSubs.flatMap((s) => {
-      const t = s.created_at ? new Date(s.created_at) : null;
-      if (!t) return [];
-      return [
-        {
-          title: "New subscription",
-          subtitle: `${s.profiles?.full_name ?? "A member"} — ${s.gym_passes?.name ?? "Pass"}`,
-          time: t,
-          kind: "sub" as const,
-        },
-      ];
-    }),
-  ]
-    .sort((a, b) => b.time.getTime() - a.time.getTime())
-    .slice(0, 10);
 
   const revenueByDay = new Map<string, number>();
   for (const p of paymentsLast14Days) {
@@ -221,42 +167,14 @@ export default async function OverviewPage() {
         <RevenueChart days={chartDays} />
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-3.5 lg:grid-cols-[1fr_1.15fr]">
-        <div className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
-          <h3 className="mb-3.5 flex items-center gap-2 font-display text-[17px] font-bold">
-            <Bell className="size-4 text-energy" /> Expiry Alerts
-          </h3>
-          <div className="flex gap-2.5">
-            <AlertChip count={expired} label="Expired" tone="danger" />
-            <AlertChip count={critical} label="≤ 7 Days" tone="critical" />
-            <AlertChip count={expiring} label="≤ 30 Days" tone="warn" />
-          </div>
-        </div>
-
-        <div className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
-          <h3 className="mb-3.5 font-display text-[17px] font-bold">Recent Activity</h3>
-          {activity.length === 0 ? (
-            <p className="py-6 text-center text-[13px] text-muted-foreground">No recent activity</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {activity.map((a, i) => (
-                <li key={i} className="flex items-center gap-3 py-2.5">
-                  <span
-                    className={`grid size-8 shrink-0 place-items-center rounded-full ${
-                      a.kind === "checkin" ? "bg-brand/15 text-brand" : "bg-aqua/15 text-aqua"
-                    }`}
-                  >
-                    {a.kind === "checkin" ? <Users className="size-4" /> : <CalendarClock className="size-4" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-bold">{a.title}</span>
-                    <span className="block truncate text-[11.5px] text-muted-foreground">{a.subtitle}</span>
-                  </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(a.time)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+      <div className="mb-5 rounded-[20px] border border-border bg-card p-5 shadow-sm">
+        <h3 className="mb-3.5 flex items-center gap-2 font-display text-[17px] font-bold">
+          <Bell className="size-4 text-energy" /> Expiry Alerts
+        </h3>
+        <div className="flex gap-2.5">
+          <AlertChip count={expired} label="Expired" tone="danger" />
+          <AlertChip count={critical} label="≤ 7 Days" tone="critical" />
+          <AlertChip count={expiring} label="≤ 30 Days" tone="warn" />
         </div>
       </div>
     </div>
@@ -286,16 +204,4 @@ function AlertChip({ count, label, tone }: { count: number; label: string; tone:
       <div className="text-[10px] font-bold uppercase tracking-wide">{label}</div>
     </div>
   );
-}
-
-function timeAgo(date: Date) {
-  const diffMs = Date.now() - date.getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }

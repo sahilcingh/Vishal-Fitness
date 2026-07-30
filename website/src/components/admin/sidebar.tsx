@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -17,6 +17,8 @@ import {
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -69,9 +71,19 @@ function NavLink({
   );
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ name, email }: { name: string; email: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <aside className="flex w-full flex-col gap-0 border-r border-sidebar-border bg-sidebar p-3.5 dark:bg-[linear-gradient(160deg,#141414,#242424)] md:sticky md:top-0 md:h-screen md:w-60">
@@ -118,18 +130,23 @@ export function AdminSidebar() {
 
       <div className="mt-3.5 flex items-center gap-2.5 border-t border-sidebar-border pt-3.5">
         <div className="grid size-8 shrink-0 place-items-center rounded-full bg-brand/15 font-display text-sm font-bold text-brand">
-          V
+          {name.charAt(0).toUpperCase() || "A"}
         </div>
-        <div>
-          <div className="text-[12.5px] font-bold text-sidebar-foreground">Vishal</div>
-          <div className="text-[10.5px] text-sidebar-foreground/50">Owner</div>
+        <div className="min-w-0">
+          <div className="truncate text-[12.5px] font-bold text-sidebar-foreground">{name}</div>
+          <div className="truncate text-[10.5px] text-sidebar-foreground/50">{email || "Owner"}</div>
         </div>
-        <button
-          className="ml-auto grid size-8 place-items-center rounded-lg border border-sidebar-border"
-          aria-label="Sign out"
-        >
-          <LogOut className="size-4 text-energy" />
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <ThemeToggle />
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border disabled:opacity-50"
+            aria-label="Sign out"
+          >
+            <LogOut className="size-4 text-energy" />
+          </button>
+        </div>
       </div>
     </aside>
   );
