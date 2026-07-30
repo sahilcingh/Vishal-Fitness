@@ -8,6 +8,7 @@ import '../../core/utils/responsive_utils.dart';
 import '../../main.dart';
 import 'package:intl/intl.dart';
 import 'admin_add_member_screen.dart';
+import 'admin_daily_revenue_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final VoidCallback onViewReports;
@@ -383,12 +384,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             style: AppStyles.eyebrow.copyWith(color: context.mutedFg),
           ),
           SizedBox(height: context.h(16)),
-          _buildPrimaryStatCard(
-            context,
-            title: 'REVENUE THIS MONTH',
-            value: currencyFormatter.format(revenue),
-            trend: _revenueTrend,
-            isPositive: _isTrendPositive,
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminDailyRevenueScreen()),
+            ),
+            child: _buildPrimaryStatCard(
+              context,
+              title: 'REVENUE THIS MONTH',
+              value: currencyFormatter.format(revenue),
+              trend: _revenueTrend,
+              isPositive: _isTrendPositive,
+            ),
           ),
           SizedBox(height: context.h(12)),
           Row(
@@ -552,6 +559,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeaderTop(context),
+        SizedBox(height: context.h(16)),
+        _buildHeaderActions(context),
+      ],
+    );
+  }
+
+  Widget _buildHeaderActions(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildHeaderActionButton(
+            context,
+            icon: Icons.calendar_month,
+            label: 'View Daily Report',
+            filled: true,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminDailyRevenueScreen()),
+            ),
+          ),
+        ),
+        SizedBox(width: context.w(12)),
+        Expanded(
+          child: _buildHeaderActionButton(
+            context,
+            icon: Icons.person_add,
+            label: 'Add Member',
+            filled: false,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminAddMemberScreen()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderActionButton(BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: context.w(12), vertical: context.h(14)),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.brand : context.card,
+          borderRadius: BorderRadius.circular(context.r(14)),
+          border: Border.all(color: filled ? AppColors.brand : context.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: context.r(16), color: filled ? Colors.white : context.fg),
+            SizedBox(width: context.w(8)),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: AppStyles.bodyFont.copyWith(
+                  fontSize: context.sp(12),
+                  fontWeight: FontWeight.w700,
+                  color: filled ? Colors.white : context.fg,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderTop(BuildContext context) {
     final now = DateTime.now();
     final formattedDate = DateFormat('EEEE, MMMM d').format(now);
 
@@ -676,6 +763,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 color: Colors.white,
                 letterSpacing: -1,
               ),
+            ),
+          ),
+          SizedBox(height: context.h(8)),
+          Text(
+            'Day-wise breakdown →',
+            style: AppStyles.bodyFont.copyWith(
+              color: AppColors.brand,
+              fontSize: context.sp(11),
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

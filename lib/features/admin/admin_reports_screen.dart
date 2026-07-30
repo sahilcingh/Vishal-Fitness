@@ -5,6 +5,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../core/utils/csv_export.dart';
 import '../../main.dart';
+import 'admin_daily_revenue_screen.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -1077,6 +1078,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           context.h(120),
         ),
         children: [
+          _dailyRevenueEntry(context),
+          SizedBox(height: context.h(12)),
           _category(
             index: 0,
             title: 'Membership Reports',
@@ -1130,6 +1133,58 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
             comingSoon: true,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _dailyRevenueEntry(BuildContext context) {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDailyRevenueScreen()),
+      ),
+      borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
+      child: Container(
+        padding: EdgeInsets.all(context.r(16)),
+        decoration: BoxDecoration(
+          gradient: AppColors.gradientInk,
+          borderRadius: BorderRadius.circular(context.r(AppStyles.radiusMd)),
+          border: Border.all(color: context.border.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(context.r(10)),
+              decoration: BoxDecoration(
+                color: AppColors.brand.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.calendar_month, color: AppColors.brand, size: context.r(22)),
+            ),
+            SizedBox(width: context.w(14)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Revenue & New Members',
+                    style: AppStyles.displayFont.copyWith(
+                      fontSize: context.sp(15),
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: context.h(4)),
+                  Text(
+                    'Every payment received today — name, amount, balance',
+                    style: AppStyles.bodyFont.copyWith(fontSize: context.sp(11), color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white70, size: context.r(14)),
+          ],
+        ),
       ),
     );
   }
