@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 Future<void> exportCsv(String content, String filename) async {
   final dir = await getTemporaryDirectory();
   final file = File('${dir.path}/$filename');
-  await file.writeAsString(content);
+  // BOM so Excel reads the file as UTF-8 (otherwise ₹ and other symbols get mangled)
+  await file.writeAsString('﻿$content');
   await SharePlus.instance.share(
     ShareParams(
       files: [XFile(file.path)],
