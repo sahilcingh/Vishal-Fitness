@@ -215,7 +215,7 @@ export function ExpiryTable({ rows, passes }: { rows: ExpiryRow[]; passes: Pass[
                           </span>
                           <div className="min-w-0">
                             <div className="truncate font-bold">{r.name}</div>
-                            <div className="truncate text-[11.5px] text-muted-foreground">{r.phone || "—"}</div>
+                            <div className="truncate text-[11.5px] text-muted-foreground">{r.phone || "-"}</div>
                           </div>
                         </div>
                       </td>

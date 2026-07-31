@@ -8,7 +8,7 @@ import { RecentAdditions } from "@/components/admin/recent-additions";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Add Member — Vishal Fitness Admin",
+  title: "Add Member - Vishal Fitness Admin",
 };
 
 type RecentMemberRow = {

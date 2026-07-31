@@ -44,14 +44,14 @@ function toHM(d: Date) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 // Mirrors DateTime(...).toIso8601String() on a *local* (non-UTC) DateTime in
-// the Flutter screen — a naive "YYYY-MM-DDTHH:mm:00" string with no timezone
+// the Flutter screen - a naive "YYYY-MM-DDTHH:mm:00" string with no timezone
 // suffix. Deliberately NOT using Date#toISOString() here, which would convert
 // to UTC and shift the wall-clock time the admin actually picked.
 function toLocalNaiveISOString(dateStr: string, timeStr: string) {
   return `${dateStr}T${timeStr}:00`;
 }
 // item['start_time'] has no timezone suffix, so `new Date(...)` parses it as
-// local wall-clock time — matching Dart's DateTime.parse() behavior on a
+// local wall-clock time - matching Dart's DateTime.parse() behavior on a
 // naive string. Do not swap this for a UTC-aware parse.
 function prettyDateTime(raw: string) {
   const d = new Date(raw);
@@ -289,7 +289,7 @@ function ClassForm({
     }
     const durationNum = parseIntOr(duration, 45);
     const capacityNum = parseIntOr(capacity, 20);
-    // Flutter's int.tryParse(...) ?? fallback lets 0 slip through silently —
+    // Flutter's int.tryParse(...) ?? fallback lets 0 slip through silently -
     // a 0-minute or 0-capacity class is never bookable, so guard against it here.
     if (durationNum < 1) {
       setError("Duration must be at least 1 minute.");
@@ -301,7 +301,7 @@ function ClassForm({
     }
     // The date input already blocks picking a past date (min={todayYMD}), but
     // "today" + an already-passed time still slips through since the time
-    // input has no such guard — check it here at submit time.
+    // input has no such guard - check it here at submit time.
     const submitNow = new Date();
     if (date === toYMD(submitNow) && time <= toHM(submitNow)) {
       setError("That time has already passed today. Please choose a later time.");

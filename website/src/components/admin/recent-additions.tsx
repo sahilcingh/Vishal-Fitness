@@ -39,7 +39,7 @@ export function RecentAdditions({ members, passes }: { members: RecentMember[]; 
     <>
       <div className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
         <h3 className="font-display text-[16px] font-bold">Recent Additions</h3>
-        <p className="mt-0.5 text-[12px] text-muted-foreground">Newest members — click to edit</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">Newest members - click to edit</p>
 
         {members.length === 0 ? (
           <p className="py-8 text-center text-[13px] text-muted-foreground">No members added yet.</p>

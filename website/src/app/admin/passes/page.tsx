@@ -7,11 +7,11 @@ import { PassesManager, type GymPass } from "@/components/admin/passes-manager";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Passes — Vishal Fitness Admin",
+  title: "Passes - Vishal Fitness Admin",
 };
 
 // Mirrors the try/catch around supabase.from('gym_passes').select() in
-// admin_passes_screen.dart's _fetchPasses() — one failing query never takes
+// admin_passes_screen.dart's _fetchPasses() - one failing query never takes
 // down the whole page (see the identical safeSelect in admin/classes/page.tsx).
 // Errors are still logged (not just swallowed) so a genuine query failure is
 // distinguishable from real zero rows in server logs.

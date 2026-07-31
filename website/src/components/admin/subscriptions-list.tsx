@@ -117,7 +117,7 @@ export function SubscriptionsList({
 
   async function updateStatus(id: string, status: string) {
     // Suspending or cancelling is destructive (cuts the member's access) and
-    // fires immediately from the menu — confirm before mutating.
+    // fires immediately from the menu - confirm before mutating.
     if (status === "suspended" && !window.confirm("Suspend this subscription? The member will lose access until it's reactivated.")) {
       return;
     }
@@ -147,7 +147,7 @@ export function SubscriptionsList({
         }
       }
       if (result?.success) {
-        setCredentials({ name, email: memberEmails[userId] ?? "—", password: result.temp_password ?? "" });
+        setCredentials({ name, email: memberEmails[userId] ?? "-", password: result.temp_password ?? "" });
       } else {
         setErrorMessage(result?.error ?? "Reset failed. Deploy the reset-member-password Edge Function first.");
       }
@@ -281,7 +281,7 @@ export function SubscriptionsList({
                   <div className="flex rounded-lg bg-background py-1.5">
                     <MiniStat label="TOTAL" value={formatINR(effectivePrice)} />
                     <Divider />
-                    <MiniStat label="DISC" value={discountAmount > 0 ? formatINR(discountAmount) : "—"} className={discountAmount > 0 ? "text-sun" : "text-muted-foreground"} />
+                    <MiniStat label="DISC" value={discountAmount > 0 ? formatINR(discountAmount) : "-"} className={discountAmount > 0 ? "text-sun" : "text-muted-foreground"} />
                     <Divider />
                     <MiniStat label="PAID" value={formatINR(sub.paid)} className="text-brand" />
                     <Divider />

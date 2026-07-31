@@ -26,7 +26,7 @@ export function LoginForm({
   const isStaff = mode === "staff";
 
   // Tracks the latest `mode` prop so an in-flight handleForgotPassword() call
-  // can tell, once it resolves, whether the user has since switched modes —
+  // can tell, once it resolves, whether the user has since switched modes -
   // this component stays mounted across mode toggles, so state like
   // forgotSent otherwise persists and can leak into the wrong mode's view.
   const modeRef = useRef(mode);
@@ -92,7 +92,7 @@ export function LoginForm({
     const isRoleAdmin = profile?.role === "admin";
 
     // Staff mode is a guard, not a gate: picking "Staff" but not actually
-    // being an admin is rejected. Picking "Member" never blocks an admin —
+    // being an admin is rejected. Picking "Member" never blocks an admin -
     // they just land on the admin portal, same as the Flutter app.
     if (isStaff && !isRoleAdmin) {
       await supabase.auth.signOut();

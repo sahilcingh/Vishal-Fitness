@@ -1,4 +1,4 @@
-// Ported from APP/lib/features/train/exercises.dart — same category list,
+// Ported from APP/lib/features/train/exercises.dart - same category list,
 // same exercise names, so previous-best lookups and logged rows stay
 // consistent with data already recorded by the mobile app.
 
@@ -6,7 +6,7 @@ export type ExerciseCategoryName = "Chest" | "Back" | "Shoulders" | "Arms" | "Le
 
 export type ExerciseCategoryDef = {
   name: ExerciseCategoryName;
-  // Tailwind color token suffix — used as `text-${color}`, `bg-${color}`, etc.
+  // Tailwind color token suffix - used as `text-${color}`, `bg-${color}`, etc.
   color: "energy" | "brand" | "aqua" | "pulse" | "sun";
   exercises: string[];
 };

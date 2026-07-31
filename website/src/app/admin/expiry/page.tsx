@@ -9,7 +9,7 @@ import { ExpiryExportButton } from "@/components/admin/expiry-export-button";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Expiry Alerts — Vishal Fitness Admin",
+  title: "Expiry Alerts - Vishal Fitness Admin",
 };
 
 // One failing query never takes down the whole page. Errors are still
@@ -54,7 +54,7 @@ function isValidYMD(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 // Supabase returns `date` columns as "YYYY-MM-DD" but `timestamp`/`timestamptz`
-// columns as a full ISO string — normalize either to a bare date so we never
+// columns as a full ISO string - normalize either to a bare date so we never
 // silently misread a real stored date.
 function normalizeYMD(s: string | null | undefined) {
   if (!s) return "";
@@ -70,7 +70,7 @@ function daysLeft(endYMD: string, todayYMD: string) {
 export default async function ExpiryPage() {
   const supabase = await createClient();
   // Server may run in a different timezone than the gym (Vercel defaults to
-  // UTC) — see src/lib/ist-time.ts. toYMD() only reads local calendar
+  // UTC) - see src/lib/ist-time.ts. toYMD() only reads local calendar
   // getters here, so nowInIST() is safe (no real-instant/.getTime() use).
   const todayYMD = toYMD(nowInIST());
 
@@ -96,7 +96,7 @@ export default async function ExpiryPage() {
   ]);
 
   // Mirrors _categoryOf()/_daysLeft() in admin_expiry_screen.dart. A row with
-  // no usable end_date can't be bucketed — skip it rather than crash (the
+  // no usable end_date can't be bucketed - skip it rather than crash (the
   // Dart screen assumes end_date is always present).
   const rows: ExpiryRow[] = subs
     .map((s): ExpiryRow | null => {
@@ -110,11 +110,11 @@ export default async function ExpiryPage() {
         userId: s.user_id,
         name: s.profiles?.full_name ?? "Unknown",
         phone: s.profiles?.phone ?? "",
-        passName: s.gym_passes?.name ?? "—",
+        passName: s.gym_passes?.name ?? "-",
         passPrice: s.gym_passes?.price ?? null,
         startDate: startYMD,
         endDate: endYMD,
-        formattedStart: startYMD ? prettyDate(startYMD) : "—",
+        formattedStart: startYMD ? prettyDate(startYMD) : "-",
         formattedEnd: prettyDate(endYMD),
         days,
         category,

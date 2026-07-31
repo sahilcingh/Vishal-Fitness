@@ -10,10 +10,10 @@ import { RefreshButton } from "@/components/admin/refresh-button";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Overview — Vishal Fitness Admin",
+  title: "Overview - Vishal Fitness Admin",
 };
 
-// Mirrors _safe() in admin_dashboard_screen.dart — one failing query never
+// Mirrors _safe() in admin_dashboard_screen.dart - one failing query never
 // takes down the rest of the dashboard.
 async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
@@ -29,14 +29,14 @@ async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unk
   }
 }
 
-// Local-calendar formatting — NOT .toISOString(), which would convert
+// Local-calendar formatting - NOT .toISOString(), which would convert
 // through UTC first and can land on the wrong IST calendar day.
 function dayKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // classes.start_time is stored as a naive local (IST) string with no
-// timezone suffix (matches the Flutter app's own storage format) — compare
+// timezone suffix (matches the Flutter app's own storage format) - compare
 // against the same naive shape rather than a real UTC instant.
 function naiveISO(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");

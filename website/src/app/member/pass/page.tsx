@@ -31,7 +31,7 @@ type CheckInRow = { id: string; checked_in_at: string };
 
 // Same technique as admin/expiry/page.tsx's toYMD/parseYMD/daysLeft: both
 // sides of the subtraction are built the same way (local-getter Date at
-// midnight), so any server-timezone offset cancels out — the day count comes
+// midnight), so any server-timezone offset cancels out - the day count comes
 // out right on a UTC-deployed Vercel host without needing a real epoch.
 // nowInIST() supplies the *correct calendar day* input (see src/lib/ist-time.ts).
 function toYMD(d: Date) {
@@ -45,7 +45,7 @@ function isValidYMD(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 // Supabase returns `date` columns as "YYYY-MM-DD" but would return a
-// timestamp column as a full ISO string — normalize either shape to a bare
+// timestamp column as a full ISO string - normalize either shape to a bare
 // date so a format change is never silently misread.
 function normalizeYMD(s: string | null | undefined) {
   if (!s) return "";
@@ -72,7 +72,7 @@ function formatVisitTime(iso: string) {
 
 const VISIT_ACCENTS = ["bg-brand", "bg-energy", "bg-pulse", "bg-aqua", "bg-sun"] as const;
 
-// Tiny deterministic PRNG (no crypto needed — purely decorative) so the same
+// Tiny deterministic PRNG (no crypto needed - purely decorative) so the same
 // member always sees the same bar pattern instead of it reshuffling on every
 // render/refresh.
 function hashSeed(s: string): number {
@@ -128,7 +128,7 @@ export default async function PassPage() {
   const memberCode = `${memberId.slice(0, 4)}-${memberId.slice(4)}`;
 
   const endYMD = normalizeYMD(subscription?.end_date);
-  const formattedExpiry = endYMD ? prettyExpiry(endYMD) : "—";
+  const formattedExpiry = endYMD ? prettyExpiry(endYMD) : "-";
 
   const todayYMD = toYMD(nowInIST());
   const daysLeft = endYMD ? daysLeftBetween(endYMD, todayYMD) : null;
@@ -151,7 +151,7 @@ export default async function PassPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px] lg:items-start">
         <div>
-          {/* Digital pass card — intentionally a fixed dark card in both light
+          {/* Digital pass card - intentionally a fixed dark card in both light
               and dark site themes, matching the physical-pass aesthetic in the
               Flutter app and the design mockup (both hardcode the same
               near-black). */}
@@ -212,7 +212,7 @@ export default async function PassPage() {
               <span className={`size-1.5 rounded-full ${daysLeft < 0 ? "bg-energy" : daysLeft <= 7 ? "bg-sun" : "bg-brand"}`} />
               <span className="text-[12.5px] font-medium text-muted-foreground">
                 {daysLeft < 0
-                  ? `Your pass expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? "" : "s"} ago — renew at the front desk.`
+                  ? `Your pass expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? "" : "s"} ago - renew at the front desk.`
                   : daysLeft === 0
                     ? "Your pass expires today."
                     : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your plan.`}

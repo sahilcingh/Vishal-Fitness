@@ -9,10 +9,10 @@ import { ReportCard, type ReportColumn, type ReportRow } from "@/components/admi
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Reports — Vishal Fitness Admin",
+  title: "Reports - Vishal Fitness Admin",
 };
 
-// Mirrors _safe() / safeSelect() on the other admin pages — one failing query
+// Mirrors _safe() / safeSelect() on the other admin pages - one failing query
 // never takes down the rest of the dashboard. Errors are still logged (not
 // just swallowed) so a genuine query failure is distinguishable from real
 // zero rows in server logs.
@@ -48,7 +48,7 @@ function addDays(d: Date, n: number) {
   return r;
 }
 // Supabase `date` columns return plain "YYYY-MM-DD" but `timestamp`/`timestamptz`
-// columns return a full ISO string — normalize either to a bare date so date-only
+// columns return a full ISO string - normalize either to a bare date so date-only
 // comparisons never silently misfire.
 function normalizeYMD(s: string | null | undefined) {
   if (!s) return "";
@@ -139,13 +139,13 @@ export default async function ReportsPage() {
 
   // Server runs in whatever timezone the host uses (often UTC), but every
   // "today"/"this month" boundary here must reflect the gym's IST calendar
-  // day — see src/lib/ist-time.ts (same convention as admin/page.tsx and
+  // day - see src/lib/ist-time.ts (same convention as admin/page.tsx and
   // admin/daily-revenue/page.tsx).
   //
   // nowInIST()'s own .getTime() is NOT a real instant (constructing a Date
   // from plain numbers is always interpreted via the server's own timezone)
-  // — safe to use for calendar-component reads (toYMD, addDays) and for
-  // comparisons against other same-way-constructed dates (parseYMD(...) —
+  // - safe to use for calendar-component reads (toYMD, addDays) and for
+  // comparisons against other same-way-constructed dates (parseYMD(...) -
   // the construction bias is identical on both sides so it cancels out in a
   // difference), but NOT for comparisons against a real timestamptz column.
   // Those need istMidnightMs()/Date.now(), which give real epoch values.
@@ -505,7 +505,7 @@ export default async function ReportsPage() {
         <span className="min-w-0 flex-1">
           <span className="block font-display text-[15px] font-bold">Daily Revenue & New Members</span>
           <span className="mt-0.5 block text-[11.5px] text-white/70">
-            Every payment received today — name, amount, balance
+            Every payment received today - name, amount, balance
           </span>
         </span>
       </Link>
@@ -730,7 +730,7 @@ function Section({
   );
 }
 
-// ── column definitions (kept outside the component body — static, never re-created) ──
+// ── column definitions (kept outside the component body - static, never re-created) ──
 
 const membershipCols = {
   active: [

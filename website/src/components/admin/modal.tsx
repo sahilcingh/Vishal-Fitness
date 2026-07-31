@@ -25,7 +25,7 @@ export function Modal({
     const panel = panelRef.current;
     // Respect an element that already grabbed focus on mount (e.g. an input
     // with its own `autoFocus`) instead of stealing it back to whatever
-    // happens to be first in DOM order — a toggle button, a "Close" icon, etc.
+    // happens to be first in DOM order - a toggle button, a "Close" icon, etc.
     if (!panel?.contains(document.activeElement)) {
       const focusable = panel?.querySelector<HTMLElement>(
         'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',

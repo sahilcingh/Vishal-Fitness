@@ -7,7 +7,7 @@ import { LoginForm } from "@/components/login/login-form";
 
 const MEMBER_HIGHLIGHTS = [
   { icon: Dumbbell, color: "text-brand", bg: "bg-brand/10", title: "Premium Equipment", sub: "Free weights, machines & dedicated cardio zones for every goal." },
-  { icon: CalendarCheck, color: "text-energy", bg: "bg-energy/10", title: "100+ Classes Weekly", sub: "Yoga, Zumba, HIIT & CrossFit — guided by expert trainers." },
+  { icon: CalendarCheck, color: "text-energy", bg: "bg-energy/10", title: "100+ Classes Weekly", sub: "Yoga, Zumba, HIIT & CrossFit - guided by expert trainers." },
   { icon: QrCode, color: "text-aqua", bg: "bg-aqua/10", title: "Instant Digital Pass", sub: "Buy once, scan on arrival. No queues, no paperwork." },
 ] as const;
 

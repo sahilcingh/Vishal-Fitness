@@ -8,11 +8,11 @@ import { AnnouncementsList, type AnnouncementRow } from "@/components/admin/anno
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Announcements — Vishal Fitness Admin",
+  title: "Announcements - Vishal Fitness Admin",
 };
 
 // Mirrors safeSelect() on the other admin pages (classes/passes/expiry/reports)
-// — one failing query never takes down the whole page, and the real error is
+// - one failing query never takes down the whole page, and the real error is
 // still logged so a genuine query failure is distinguishable from real zero
 // rows in server logs.
 async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {

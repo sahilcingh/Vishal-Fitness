@@ -61,7 +61,7 @@ export function PassFormModal({
     // durationNum/priceNum are already range-checked above (1-365 days,
     // ₹0-1,00,000). NOTE: only client-side validated; add a CHECK constraint
     // on gym_passes.duration_days / gym_passes.price at the DB level for a
-    // real backstop — a client calling the Supabase REST API directly could
+    // real backstop - a client calling the Supabase REST API directly could
     // still write an out-of-range value.
     const passData = {
       name: trimmedName,

@@ -125,7 +125,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   // discountAmount is clamped to [0, passPrice] regardless of what discountVal
   // parses to, so it can never be written to the DB negative or above the
   // pass price even if the fieldErrors gate below is somehow skipped.
-  // NOTE: this clamp is only enforced here in application code — there is no
+  // NOTE: this clamp is only enforced here in application code - there is no
   // DB-level CHECK constraint on subscriptions.discount_amount, so a client
   // calling the Supabase REST API directly (bypassing this component
   // entirely) could still write an out-of-range value.
@@ -135,7 +135,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   const effectivePrice = Math.max(passPrice - discountAmount, 0);
   const paidAmountNum = parseFloat(paidAmount) || 0;
   const balance = Math.max(effectivePrice - paidAmountNum, 0);
-  // Re-clamped immediately before use in every payment insert below — the
+  // Re-clamped immediately before use in every payment insert below - the
   // fieldErrors check in handleSubmit blocks the normal submit path, but this
   // keeps the actual write safe even if that gate is ever bypassed.
   // NOTE: only client-side validated; add a CHECK constraint on
@@ -226,7 +226,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
     return {
       actionLabel: "Add Anyway",
       tone: "energy" as const,
-      message: `Active pass still has ${daysLeft} days remaining. Adding a new pass this early is unusual — confirm only if intentional.`,
+      message: `Active pass still has ${daysLeft} days remaining. Adding a new pass this early is unusual - confirm only if intentional.`,
       suggestedStart: null,
     };
   }
@@ -362,18 +362,18 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
       const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", userId);
 
       if (paymentFailed || profileErr || photoFailed || patchFailed) {
-        // The member account itself was created successfully — don't lose
-        // those credentials — but be explicit about what still needs manual
+        // The member account itself was created successfully - don't lose
+        // those credentials - but be explicit about what still needs manual
         // follow-up rather than silently showing a false success.
         const issues = [
-          patchFailed && "applying the discount/extra-days adjustment failed — redo it manually from the Subscriptions page",
-          paymentFailed && `recording the ${formatINR(safePaidAmount)} payment failed — add it manually from the Subscriptions page`,
-          profileErr && "saving the time slot/forced-password-reset flag failed — edit the member to retry",
-          !profileErr && photoFailed && "the photo upload failed — edit the member to retry",
+          patchFailed && "applying the discount/extra-days adjustment failed - redo it manually from the Subscriptions page",
+          paymentFailed && `recording the ${formatINR(safePaidAmount)} payment failed - add it manually from the Subscriptions page`,
+          profileErr && "saving the time slot/forced-password-reset flag failed - edit the member to retry",
+          !profileErr && photoFailed && "the photo upload failed - edit the member to retry",
         ].filter(Boolean);
         setDialog({
           kind: "error",
-          message: `${name.trim()} was added, but ${issues.join("; and ")}. Login email: ${result.email ?? "—"}, temp password: ${result.temp_password ?? "—"}.`,
+          message: `${name.trim()} was added, but ${issues.join("; and ")}. Login email: ${result.email ?? "-"}, temp password: ${result.temp_password ?? "-"}.`,
         });
         router.refresh();
         return;
@@ -456,7 +456,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   async function doInsertSubscription(profile: Profile) {
     const supabase = createClient();
     try {
-      // discount_amount is already clamped to [0, passPrice] above — see the
+      // discount_amount is already clamped to [0, passPrice] above - see the
       // NOTE at its computation. NOTE: only client-side validated; there is
       // no DB CHECK constraint backing this column.
       const { data: sub, error: subErr } = await supabase
@@ -499,9 +499,9 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
 
       if (paymentFailed || profileFailed || photoFailed) {
         const issues = [
-          paymentFailed && `recording the ${formatINR(safePaidAmount)} payment failed — add it manually from the Subscriptions page`,
-          profileFailed && "saving the time slot failed — edit the member to retry",
-          !profileFailed && photoFailed && "the photo upload failed — edit the member to retry",
+          paymentFailed && `recording the ${formatINR(safePaidAmount)} payment failed - add it manually from the Subscriptions page`,
+          profileFailed && "saving the time slot failed - edit the member to retry",
+          !profileFailed && photoFailed && "the photo upload failed - edit the member to retry",
         ].filter(Boolean);
         setDialog({
           kind: "error",
@@ -597,7 +597,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
             />
             <InfoTile
               label={extraDaysNum > 0 ? `End Date (+${extraDaysNum}d)` : "End Date (auto)"}
-              value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "—"}
+              value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "-"}
               valueClass="text-brand"
             />
           </div>
@@ -639,11 +639,11 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
           </div>
 
           <div className="flex justify-around rounded-xl border border-brand/20 bg-brand/6 p-3.5">
-            <PriceStat label="TOTAL" value={selectedPass ? formatINR(effectivePrice) : "—"} />
+            <PriceStat label="TOTAL" value={selectedPass ? formatINR(effectivePrice) : "-"} />
             <PriceStat label="PAID" value={formatINR(paidAmountNum)} className="text-brand" />
             <PriceStat
               label="BALANCE"
-              value={selectedPass ? formatINR(balance) : "—"}
+              value={selectedPass ? formatINR(balance) : "-"}
               className={balance > 0 ? "text-energy" : "text-brand"}
               bold
             />
@@ -697,7 +697,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
           <>
             <DialogHeader icon={AlertTriangle} tone="sun" title="Possible Duplicate" />
             <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">
-              {dialog.memberName} already has a {dialog.passName} that started on {dialog.existingStart} — within 7
+              {dialog.memberName} already has a {dialog.passName} that started on {dialog.existingStart} - within 7
               days of the date you&apos;re entering.
             </p>
             <div className="mt-3 rounded-xl bg-sun/10 px-3.5 py-3 text-[12px] leading-relaxed text-[#B8930A]">

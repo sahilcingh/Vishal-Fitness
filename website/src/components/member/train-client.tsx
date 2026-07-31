@@ -24,7 +24,7 @@ import { categoryGradientClass } from "@/lib/exercises";
 import { cn } from "@/lib/utils";
 import type { ClassRow, SessionRow } from "@/app/member/train/page";
 
-// ── Local workout-in-progress model — never persisted until Finish Workout ──
+// ── Local workout-in-progress model - never persisted until Finish Workout ──
 
 type ActiveSet = { weightKg: number | null; reps: number | null; isDone: boolean; isWarmup: boolean };
 type ActiveExercise = { name: string; category: string; sets: ActiveSet[]; previousBest: string | null };
@@ -39,7 +39,7 @@ function formatTimer(totalSeconds: number) {
 }
 
 // classes.start_time is a naive local (IST) string with no timezone suffix
-// (see naiveISO() in train/page.tsx) — append the IST offset explicitly so it
+// (see naiveISO() in train/page.tsx) - append the IST offset explicitly so it
 // parses as the correct real instant, rather than reading it back through
 // plain new Date(iso).getHours(), which reflects the *viewer's own* local
 // timezone instead of the gym's IST convention.
@@ -62,22 +62,22 @@ const IST_DAY_FMT = new Intl.DateTimeFormat("en-US", {
 
 function formatClassTime(iso: string) {
   const d = parseNaiveIstDate(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return IST_TIME_FMT.format(d);
 }
 
 function formatClassDay(iso: string) {
   const d = parseNaiveIstDate(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return IST_DAY_FMT.format(d);
 }
 
 function formatSessionDay(iso: string) {
   // workout_sessions.started_at is a real timestamptz (set via
-  // .toISOString() on insert below), so it already carries a real offset —
+  // .toISOString() on insert below), so it already carries a real offset -
   // format it directly through the same IST timezone for display.
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return IST_DAY_FMT.format(d);
 }
 
@@ -93,7 +93,7 @@ export function TrainClient({
   const router = useRouter();
   const [tab, setTab] = useState<"classes" | "workouts">("classes");
 
-  // Reserve-a-spot info dialog (no DB write — same as the mobile app, which
+  // Reserve-a-spot info dialog (no DB write - same as the mobile app, which
   // only points members to the front desk to reserve).
   const [reserveClass, setReserveClass] = useState<ClassRow | null>(null);
 
@@ -555,7 +555,7 @@ export function TrainClient({
                       <div className="truncate text-[14px] font-bold">{s.name ?? "Workout"}</div>
                       <div className="text-[12px] text-muted-foreground">{formatSessionDay(s.started_at)}</div>
                     </div>
-                    <span className="num text-[13px] font-semibold text-muted-foreground">{mins > 0 ? `${mins}m` : "—"}</span>
+                    <span className="num text-[13px] font-semibold text-muted-foreground">{mins > 0 ? `${mins}m` : "-"}</span>
                   </div>
                 );
               })

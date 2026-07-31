@@ -5,7 +5,7 @@ import { useState } from "react";
 export type VolumeDay = { short: string; full: string; volume: number };
 
 // Hand-rolled bar chart, same pattern as admin/revenue-chart.tsx (plain divs,
-// no charting library — one was tried earlier in this project and dropped
+// no charting library - one was tried earlier in this project and dropped
 // for a React 19 peer-dependency conflict).
 export function VolumeChart({ days }: { days: VolumeDay[] }) {
   const [hovered, setHovered] = useState<number | null>(null);

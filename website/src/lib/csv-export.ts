@@ -1,11 +1,11 @@
 // Shared CSV-export helpers used by every admin CSV download/report button
 // (daily-revenue-export-button, expiry-export-button, report-card). These
-// were previously copy-pasted per-file and had drifted — daily-revenue's
+// were previously copy-pasted per-file and had drifted - daily-revenue's
 // csvValue() was missing the formula-injection escape below. Consolidated
 // here so the escape can't silently go missing from one export again.
 
 // A leading =, +, -, or @ makes some spreadsheet apps (notably Excel) treat
-// the cell as a formula instead of literal text — a classic CSV/Excel
+// the cell as a formula instead of literal text - a classic CSV/Excel
 // formula-injection vector when the value comes from user-editable data
 // (e.g. profiles.full_name). Prefixing with a single quote forces text mode.
 export function csvValue(val: string): string {

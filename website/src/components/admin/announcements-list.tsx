@@ -18,7 +18,7 @@ export type AnnouncementRow = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// `created_at` is a timestamptz — Supabase returns a full ISO string, which is
+// `created_at` is a timestamptz - Supabase returns a full ISO string, which is
 // safe to pass straight into `new Date(...)` (unlike the bare YYYY-MM-DD
 // `date` columns used on other admin pages). Mirrors Flutter's
 // DateFormat('MMM d, yyyy h:mm a').
@@ -36,7 +36,7 @@ export function AnnouncementsList({ announcements }: { announcements: Announceme
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   // A Set (not a single id) because two different rows' toggle/delete calls
-  // can be in flight at once — a scalar "pendingId" would have row B's button
+  // can be in flight at once - a scalar "pendingId" would have row B's button
   // re-enable early the moment row A's unrelated request finished.
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [rowError, setRowError] = useState<string | null>(null);

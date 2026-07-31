@@ -24,7 +24,7 @@ function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Mirrors _computeStreak() in dashboard_screen.dart — consecutive IST
+// Mirrors _computeStreak() in dashboard_screen.dart - consecutive IST
 // calendar days with a check-in, counting back from today (or yesterday, if
 // today's check-in hasn't happened yet so an existing streak isn't wiped
 // out mid-day).
@@ -44,7 +44,7 @@ function computeStreak(checkInDates: Set<string>, now: Date) {
 }
 
 // classes.start_time is a naive local (IST) string with no timezone suffix
-// (matches the admin Classes page's own storage convention) — compare
+// (matches the admin Classes page's own storage convention) - compare
 // against the same naive shape, not a real UTC instant.
 function naiveISO(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");

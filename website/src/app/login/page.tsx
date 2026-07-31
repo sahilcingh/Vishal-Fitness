@@ -6,7 +6,7 @@ import { AuthScreen } from "@/components/login/auth-screen";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Sign In — Vishal Fitness",
+  title: "Sign In - Vishal Fitness",
   description: "Sign in to your Vishal Fitness member or staff account to book classes, view your digital pass, and manage your membership.",
 };
 

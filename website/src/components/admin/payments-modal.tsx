@@ -100,7 +100,7 @@ export function PaymentsModal({
     setError(null);
     setIsSaving(true);
     const supabase = createClient();
-    // Re-clamped immediately before the insert as a last line of defense —
+    // Re-clamped immediately before the insert as a last line of defense -
     // the checks above already block submission, but this keeps the actual
     // write safe even if that gate is ever bypassed.
     // NOTE: only client-side validated; add a CHECK constraint on

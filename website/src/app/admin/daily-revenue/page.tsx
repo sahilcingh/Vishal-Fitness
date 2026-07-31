@@ -9,11 +9,11 @@ import { DailyRevenueExportButton } from "@/components/admin/daily-revenue-expor
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Daily Revenue — Vishal Fitness Admin",
+  title: "Daily Revenue - Vishal Fitness Admin",
 };
 
 // Unlike admin_dashboard_screen.dart's _safe() (mirrored in the Overview
-// page), the numbers here feed an official CSV export — a swallowed error
+// page), the numbers here feed an official CSV export - a swallowed error
 // must not render identically to a genuine zero-revenue day. Callers check
 // `hadError` and show a warning banner instead of silently trusting `data`.
 async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
@@ -142,7 +142,7 @@ export default async function DailyRevenuePage({
       {hadDataError && (
         <div className="mb-5 flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-[13px] text-danger">
           <AlertTriangle className="size-4 shrink-0" />
-          <span className="flex-1">Couldn&apos;t load some revenue data — figures below may be incomplete.</span>
+          <span className="flex-1">Couldn&apos;t load some revenue data - figures below may be incomplete.</span>
           <a href={`/admin/daily-revenue?day=${dayStr}`} className="shrink-0 font-bold underline">
             Retry
           </a>
@@ -237,7 +237,7 @@ export default async function DailyRevenuePage({
                     </td>
                     <td className="num px-3 py-3.5 text-right">{formatINR(t.packageAmount)}</td>
                     <td className="num px-3 py-3.5 text-right text-energy">
-                      {t.discount > 0 ? formatINR(t.discount) : "—"}
+                      {t.discount > 0 ? formatINR(t.discount) : "-"}
                     </td>
                     <td className="num px-3 py-3.5 text-right font-bold text-brand">{formatINR(t.paidAmount)}</td>
                     <td className="num px-5 py-3.5 text-right font-semibold">

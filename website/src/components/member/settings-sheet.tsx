@@ -84,7 +84,7 @@ export function SettingsSheet({
       <Modal open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} maxWidthClass="max-w-[360px]">
         <div className="text-[17px] font-bold">Delete Account?</div>
         <p className="mt-2 text-[13px] text-muted-foreground">
-          This will permanently delete your account and all data — workout history, check-ins, and profile
+          This will permanently delete your account and all data - workout history, check-ins, and profile
           information. This cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-3">

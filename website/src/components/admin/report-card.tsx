@@ -97,7 +97,7 @@ export function ReportCard({
           onClick={() => {
             const next = !open;
             setOpen(next);
-            // Only reset to page 1 when opening — collapsing and reopening
+            // Only reset to page 1 when opening - collapsing and reopening
             // within the same session should keep the reader's place.
             if (next) setPage(1);
           }}
@@ -143,7 +143,7 @@ export function ReportCard({
                     {row.map((cell, j) => {
                       const kind = columns[j]?.kind ?? "text";
                       const isNum = kind === "number" || kind === "currency";
-                      const display = cell === "" ? "—" : kind === "currency" ? formatINR(Number(cell)) : cell;
+                      const display = cell === "" ? "-" : kind === "currency" ? formatINR(Number(cell)) : cell;
                       return (
                         <td
                           key={j}

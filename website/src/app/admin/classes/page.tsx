@@ -7,11 +7,11 @@ import { ClassesManager } from "@/components/admin/classes-manager";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Classes — Vishal Fitness Admin",
+  title: "Classes - Vishal Fitness Admin",
 };
 
 // Mirrors the try/catch around supabase.from('classes').select() in
-// admin_classes_screen.dart's _fetchClasses() — one failing query never
+// admin_classes_screen.dart's _fetchClasses() - one failing query never
 // takes down the whole page. Errors are still logged (not just swallowed)
 // so a genuine query failure is distinguishable from real zero rows in
 // server logs, even though the UI shows the same empty state either way.

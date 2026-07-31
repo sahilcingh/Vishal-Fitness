@@ -26,7 +26,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 // workout_sessions.started_at / workout_logs.performed_at are real instants
 // (timestamptz). Mirrors nowInIST() in ist-time.ts but for an arbitrary given
-// instant rather than "now" — needed to render calendar/clock text for a row
+// instant rather than "now" - needed to render calendar/clock text for a row
 // as the gym's IST wall-clock would read it, regardless of the server host's
 // own timezone (see ist-time.ts doc comment for why plain local getters on a
 // Date built from a real timestamp are unsafe once deployed to a UTC host).
@@ -87,7 +87,7 @@ export default async function ProgressPage() {
   // the volume chart/totals, workout_sessions for the history list, and
   // workout_sets (joined to workout_sessions for the user_id filter) for
   // personal-record computation. Each read is independently safe via
-  // safeSelect — if workout_sessions/workout_sets don't exist yet on this
+  // safeSelect - if workout_sessions/workout_sets don't exist yet on this
   // Supabase project, those sections degrade to empty rather than the whole
   // page failing (same effect as the Flutter screen's try/catch fallback,
   // achieved here through the existing per-query safeSelect convention).
@@ -186,7 +186,7 @@ export default async function ProgressPage() {
         <div className="grid grid-cols-3 gap-3 lg:grid-cols-1">
           <StatTile icon={Activity} label="Sessions" value={String(sessionCount)} accent="bg-brand/12 text-brand" />
           <StatTile icon={Clock} label="Minutes" value={String(Math.round(totalMinutes))} accent="bg-pulse/12 text-pulse" />
-          <StatTile icon={Trophy} label="Best Day" value={bestDay > 0 ? fmtNum(bestDay) : "—"} accent="bg-energy/12 text-energy" />
+          <StatTile icon={Trophy} label="Best Day" value={bestDay > 0 ? fmtNum(bestDay) : "-"} accent="bg-energy/12 text-energy" />
         </div>
       </div>
 

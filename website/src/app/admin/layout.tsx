@@ -13,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     data: { user },
   } = await supabase.auth.getUser();
 
-  // The proxy only checks for *any* authenticated session — it never verifies
+  // The proxy only checks for *any* authenticated session - it never verifies
   // role, so this is the actual admin gate. Without it, any authenticated
   // member could load every /admin/* page, same as the role check already
   // enforced at sign-in in LoginForm.
@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: profile } = await supabase.from("profiles").select("full_name, role").eq("id", user.id).maybeSingle();
 
-  // A validly-authenticated member, just not an admin — send them to their
+  // A validly-authenticated member, just not an admin - send them to their
   // own portal rather than signing them out (that guard only applies to the
   // "Staff" sign-in path itself, in LoginForm).
   if (profile?.role !== "admin") redirect("/member/today");

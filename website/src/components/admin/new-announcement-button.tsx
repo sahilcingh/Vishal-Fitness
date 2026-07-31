@@ -39,7 +39,7 @@ export function NewAnnouncementButton({ createdBy }: { createdBy: string | null 
     const supabase = createClient();
     try {
       // The inputs' maxLength attributes are HTML-only and trivially bypassed
-      // via devtools/a direct REST call — re-truncate here right before the
+      // via devtools/a direct REST call - re-truncate here right before the
       // payload is built so an oversized value can't reach the DB through
       // this form. NOTE: only client-side validated; add a CHECK constraint
       // (or column length limit) on announcements.title / .message at the DB

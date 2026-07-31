@@ -43,7 +43,7 @@ function isValidYMD(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 // Supabase returns `date` columns as "YYYY-MM-DD" but `timestamp`/`timestamptz`
-// columns as a full ISO string ("YYYY-MM-DDTHH:mm:ss+00:00") — normalize either
+// columns as a full ISO string ("YYYY-MM-DDTHH:mm:ss+00:00") - normalize either
 // to a bare date so we never silently discard a real stored date.
 function normalizeYMD(s: string | null | undefined) {
   if (!s) return "";
@@ -89,7 +89,7 @@ export function EditMemberModal({
   const selectedPass = passes.find((p) => p.id === passId) ?? null;
   const extraDaysNum = parseInt(extraDays, 10) || 0;
   // Show the real stored end_date until the admin actually changes something
-  // that would affect it (pass, start date, or extra days) — only then recompute.
+  // that would affect it (pass, start date, or extra days) - only then recompute.
   const unchanged = passId === originalPassId && startDate === originalStartDate && extraDaysNum === 0;
   const endDate =
     unchanged && storedEndDate
@@ -123,7 +123,7 @@ export function EditMemberModal({
       setTimeSlot(profile?.time_slot ?? "");
       setExistingPhotoUrl(profile?.photo_url ?? null);
 
-      // Fetch fresh — prefer the active subscription, else the most recent one.
+      // Fetch fresh - prefer the active subscription, else the most recent one.
       const { data: activeSubs } = await supabase
         .from("subscriptions")
         .select("id, pass_id, status, start_date, end_date")
@@ -280,7 +280,7 @@ export function EditMemberModal({
             }
           }
           if (!emailResult?.success) {
-            // Don't claim the email changed when it didn't — surface the
+            // Don't claim the email changed when it didn't - surface the
             // real failure and stop short of showing it as updated.
             setError(
               `Profile saved, but the email update failed: ${emailResult?.error ?? "the reset-member-password Edge Function may not be deployed"}.`,
@@ -370,7 +370,7 @@ export function EditMemberModal({
               onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
               inputMode="numeric"
             />
-            <Dropdown label="Gender" value={gender} onChange={setGender} options={["", ...GENDERS]} optionLabel={(g) => g || "—"} />
+            <Dropdown label="Gender" value={gender} onChange={setGender} options={["", ...GENDERS]} optionLabel={(g) => g || "-"} />
             <div className="sm:col-span-2">
               <Field label="Time Slot" value={timeSlot} onChange={setTimeSlot} hint="e.g. 6:00 AM - 8:00 AM" />
             </div>
@@ -406,7 +406,7 @@ export function EditMemberModal({
             <div className="sm:col-span-2">
               <InfoTile
                 label="End Date"
-                value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "—"}
+                value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "-"}
                 valueClass="text-brand"
               />
             </div>
@@ -463,7 +463,7 @@ export function EditMemberModal({
 }
 
 // Same label-above-input pattern as add-member-form.tsx's Field/Dropdown/
-// InfoTile — kept local (rather than imported) so this modal doesn't couple
+// InfoTile - kept local (rather than imported) so this modal doesn't couple
 // to the Add Member form's internals, matching how every other modal in
 // this codebase (pass-form-modal.tsx, DiscountModal) defines its own field
 // helpers.

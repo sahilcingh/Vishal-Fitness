@@ -21,7 +21,7 @@ async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unk
 }
 
 // classes.start_time is a naive local (IST) string with no timezone suffix
-// (same convention established in member/today/page.tsx) — compare against
+// (same convention established in member/today/page.tsx) - compare against
 // the same naive shape, not a real UTC instant.
 function naiveISO(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");

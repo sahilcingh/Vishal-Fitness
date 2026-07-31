@@ -7,7 +7,7 @@ import { SubscriptionsList, type SubscriptionRow } from "@/components/admin/subs
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Subscriptions — Vishal Fitness Admin",
+  title: "Subscriptions - Vishal Fitness Admin",
 };
 
 export default async function SubscriptionsPage() {

@@ -23,11 +23,11 @@ import { nowInIST } from "@/lib/ist-time";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Vishal Fitness — Gym Membership & Classes in Unnao",
+  title: "Vishal Fitness - Gym Membership & Classes in Unnao",
   description:
     "Join Vishal Fitness in Unnao for expert-led training, 100+ classes a week, and instant digital gym passes. Open Mon–Sat, 6:00 AM – 10:00 PM. Rated 4.9 stars by 200+ members.",
   openGraph: {
-    title: "Vishal Fitness — Gym Membership & Classes in Unnao",
+    title: "Vishal Fitness - Gym Membership & Classes in Unnao",
     description:
       "Expert trainers, 100+ classes a week, and instant digital gym passes. Open Mon–Sat, 6:00 AM – 10:00 PM in Unnao.",
     type: "website",
@@ -82,7 +82,7 @@ export default async function WelcomePage() {
 
   // twoHoursAgo needs a real instant (compared against a real timestamptz
   // column), so it's derived from the true current time, not nowInIST()'s
-  // calendar-correct-but-not-a-real-instant Date — see src/lib/ist-time.ts.
+  // calendar-correct-but-not-a-real-instant Date - see src/lib/ist-time.ts.
   const nowReal = new Date();
   const twoHoursAgo = new Date(nowReal.getTime() - 2 * 60 * 60 * 1000);
 
@@ -101,7 +101,7 @@ export default async function WelcomePage() {
 
   const liveCount = checkIns.length;
 
-  // Gym open hours: Mon–Sat 6 AM – 10 PM IST — must reflect the gym's actual
+  // Gym open hours: Mon–Sat 6 AM – 10 PM IST - must reflect the gym's actual
   // local time regardless of the server's own OS timezone.
   const nowIST = nowInIST();
   const weekday = nowIST.getDay(); // 0 = Sun
@@ -174,7 +174,7 @@ export default async function WelcomePage() {
             </h1>
 
             <p className="mt-5 max-w-md text-[15px] font-medium leading-relaxed text-foreground/80">
-              A vibrant operating system for the modern gym — book classes, track lifts, log progress, and walk in
+              A vibrant operating system for the modern gym - book classes, track lifts, log progress, and walk in
               with a single QR.
             </p>
 
@@ -291,7 +291,7 @@ export default async function WelcomePage() {
               color="text-aqua"
               bg="bg-aqua/10"
               title="Top Rated"
-              sub="4.9 stars from 200+ members — Unnao's most loved fitness centre."
+              sub="4.9 stars from 200+ members - Unnao's most loved fitness centre."
               cta="Follow us"
             />
           </a>
@@ -341,7 +341,7 @@ export default async function WelcomePage() {
           <div className="mt-14 rounded-[20px] border border-brand/25 bg-card/85 p-6 text-center">
             <h2 className="text-[15px] font-bold">Membership Plans</h2>
             <p className="mt-1.5 text-[12.5px] text-muted-foreground">
-              Contact us for current membership pricing — visit us at the gym or reach out on Instagram.
+              Contact us for current membership pricing - visit us at the gym or reach out on Instagram.
             </p>
             <a
               href="https://www.instagram.com/vishal.fitness.unnao"
@@ -417,7 +417,7 @@ function PassCard({ pass, index, isLast }: { pass: Pass; index: number; isLast: 
   const perMonth = pass.duration_days > 0 ? Math.round(pass.price / (pass.duration_days / 30)) : pass.price;
   const features = pass.features ?? [];
   // The sun→energy→pulse gradient's "sun" stop is too light for white text to
-  // clear WCAG AA contrast on its own — add a dark scrim behind the content.
+  // clear WCAG AA contrast on its own - add a dark scrim behind the content.
   const needsScrim = gradient === PASS_GRADIENTS[3];
 
   return (

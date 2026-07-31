@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MemberShell } from "@/components/member/member-shell";
 
 export const metadata: Metadata = {
-  title: { default: "Member Portal — Vishal Fitness", template: "%s — Vishal Fitness" },
+  title: { default: "Member Portal - Vishal Fitness", template: "%s - Vishal Fitness" },
   robots: { index: false, follow: false },
 };
 
@@ -24,7 +24,7 @@ export default async function MemberLayout({ children }: { children: React.React
     .eq("id", user.id)
     .maybeSingle();
 
-  // An admin account has no member-facing data of its own — send them to
+  // An admin account has no member-facing data of its own - send them to
   // their real portal instead of showing an empty member experience.
   if (profile?.role === "admin") redirect("/admin");
 

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Modal } from "@/components/admin/modal";
 
 // Same cap/type check used in admin/add-member-form.tsx and
-// admin/edit-member-modal.tsx — keep all three photo uploads consistent.
+// admin/edit-member-modal.tsx - keep all three photo uploads consistent.
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export function EditProfileModal({
@@ -35,7 +35,7 @@ export function EditProfileModal({
   const [otp, setOtp] = useState("");
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Separate in-flight flags per action — sending/verifying an email OTP
+  // Separate in-flight flags per action - sending/verifying an email OTP
   // must not disable or spinner the unrelated Save Changes button, and vice
   // versa.
   const [savingProfile, setSavingProfile] = useState(false);

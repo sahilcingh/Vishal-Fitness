@@ -17,7 +17,7 @@ export function Pagination({
   onPageChange: (page: number) => void;
 }) {
   if (totalPages <= 1) return null;
-  // Clamp defensively — a filtered list can shrink out from under a
+  // Clamp defensively - a filtered list can shrink out from under a
   // previously-valid page number (e.g. narrowing a search query).
   const current = Math.min(Math.max(page, 1), totalPages);
 

@@ -5,8 +5,8 @@ import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 
 // Self-contained styling (own background/border/shadow) so this renders
-// legibly on any surface — a dark sidebar, a light hero section, or floating
-// over page content — since it's now rendered once, globally, in the root
+// legibly on any surface - a dark sidebar, a light hero section, or floating
+// over page content - since it's now rendered once, globally, in the root
 // layout rather than per-page.
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();

@@ -13,7 +13,7 @@ export function CheckInButton({ alreadyCheckedInToday = false }: { alreadyChecke
   const [state, setState] = useState<"idle" | "loading" | "success" | "error">("idle");
   // Seeded from the server's already-fetched check-ins (today's IST calendar
   // day) so a page load after checking in still shows the disabled state,
-  // and also flips true locally right after a successful check-in — either
+  // and also flips true locally right after a successful check-in - either
   // way this guards against a duplicate check_ins insert.
   const [checkedInToday, setCheckedInToday] = useState(alreadyCheckedInToday);
 
