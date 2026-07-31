@@ -44,6 +44,17 @@
   --color-danger: var(--danger);
   --color-on-brand: var(--on-brand);
 
+  /* Darkened text-only variants of brand/aqua/energy/sun/danger for use as
+     TEXT on a light card background — the raw tokens above read fine as fills
+     /borders/icons but fall under WCAG AA's 4.5:1 minimum for normal text in
+     light mode. Light-mode only (see :root below); dark mode keeps using the
+     raw token via dark:text-* since it already has enough contrast there. */
+  --color-brand-onlight: var(--brand-text-onlight);
+  --color-aqua-onlight: var(--aqua-text-onlight);
+  --color-energy-onlight: var(--energy-text-onlight);
+  --color-sun-onlight: var(--sun-text-onlight);
+  --color-danger-onlight: var(--danger-text-onlight);
+
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
@@ -87,6 +98,18 @@
   --sidebar-accent-foreground: #0f0f0f;
   --sidebar-border: #e6e6e6;
   --sidebar-ring: var(--brand);
+
+  /* Text-on-light variants — each computed to clear 4.5:1 against the light
+     --card (#ffffff). Defined only here (not in .dark) so dark-mode usages
+     that intentionally fall back to the raw token via dark:text-* are
+     unaffected. See classes-manager.tsx (Chip), expiry-table.tsx
+     (CATEGORY_STYLE/AVATAR_COLORS/TONE_CLASSES), report-card.tsx
+     (TONE_CLASSES). */
+  --brand-text-onlight: #137640;
+  --aqua-text-onlight: #187190;
+  --energy-text-onlight: #a8511b;
+  --sun-text-onlight: #756217;
+  --danger-text-onlight: #bd3d3d;
 }
 
 .dark {

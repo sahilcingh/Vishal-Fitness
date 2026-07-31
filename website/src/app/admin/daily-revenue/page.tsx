@@ -1,18 +1,32 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, Receipt, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/format";
+import { nowInIST } from "@/lib/ist-time";
 import { DailyRevenueExportButton } from "@/components/admin/daily-revenue-export-button";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Daily Revenue — Vishal Fitness Admin",
+};
+
+// Unlike admin_dashboard_screen.dart's _safe() (mirrored in the Overview
+// page), the numbers here feed an official CSV export — a swallowed error
+// must not render identically to a genuine zero-revenue day. Callers check
+// `hadError` and show a warning banner instead of silently trusting `data`.
 async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
     const { data, error } = await promise;
-    if (error) return [] as T[];
-    return data ?? ([] as T[]);
-  } catch {
-    return [] as T[];
+    if (error) {
+      console.error("daily-revenue/page: query failed:", error);
+      return { data: [] as T[], hadError: true };
+    }
+    return { data: data ?? ([] as T[]), hadError: false };
+  } catch (err) {
+    console.error("daily-revenue/page: query threw:", err);
+    return { data: [] as T[], hadError: true };
   }
 }
 
@@ -20,10 +34,10 @@ function dayKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function parseDayParam(s: string | undefined) {
-  if (!s) return new Date();
+function parseDayParam(s: string | undefined, fallback: Date) {
+  if (!s) return fallback;
   const [y, m, d] = s.split("-").map(Number);
-  if (!y || !m || !d) return new Date();
+  if (!y || !m || !d) return fallback;
   return new Date(y, m - 1, d);
 }
 
@@ -50,8 +64,8 @@ export default async function DailyRevenuePage({
   const { day: dayParam } = await searchParams;
   const supabase = await createClient();
 
-  const now = new Date();
-  const day = parseDayParam(dayParam);
+  const now = nowInIST();
+  const day = parseDayParam(dayParam, now);
   const dayStr = dayKey(day);
   const isToday = isSameDay(day, now);
 
@@ -61,14 +75,15 @@ export default async function DailyRevenuePage({
     ? "Today"
     : isSameDay(day, yesterday)
       ? "Yesterday"
-      : day.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+      : day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const dayHeading = day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   const prevDay = new Date(day);
   prevDay.setDate(prevDay.getDate() - 1);
   const nextDay = new Date(day);
   nextDay.setDate(nextDay.getDate() + 1);
 
-  const payRows = await safeSelect(
+  const { data: payRows, hadError: payRowsErrored } = await safeSelect(
     supabase
       .from("payments")
       .select(
@@ -87,14 +102,18 @@ export default async function DailyRevenuePage({
   const subscriptionIds = [...new Set(payRows.map((r) => r.subscription_id).filter((id): id is string => !!id))];
 
   const paidToDate = new Map<string, number>();
+  let totalsErrored = false;
   if (subscriptionIds.length > 0) {
-    const totals = await safeSelect<{ subscription_id: string; amount: number }>(
+    const { data: totals, hadError } = await safeSelect<{ subscription_id: string; amount: number }>(
       supabase.from("payments").select("subscription_id, amount").in("subscription_id", subscriptionIds),
     );
+    totalsErrored = hadError;
     for (const t of totals) {
       paidToDate.set(t.subscription_id, (paidToDate.get(t.subscription_id) ?? 0) + (t.amount ?? 0));
     }
   }
+
+  const hadDataError = payRowsErrored || totalsErrored;
 
   const txns = payRows.map((r) => {
     const sub = r.subscriptions;
@@ -120,43 +139,53 @@ export default async function DailyRevenuePage({
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      {hadDataError && (
+        <div className="mb-5 flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-[13px] text-danger">
+          <AlertTriangle className="size-4 shrink-0" />
+          <span className="flex-1">Couldn&apos;t load some revenue data — figures below may be incomplete.</span>
+          <a href={`/admin/daily-revenue?day=${dayStr}`} className="shrink-0 font-bold underline">
+            Retry
+          </a>
+        </div>
+      )}
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Daily Revenue Report
           </div>
-          <h1 className="mt-1.5 font-display text-[32px] font-bold leading-none">Daily Revenue</h1>
+          <h1 className="mt-1.5 font-display text-[32px] font-bold leading-none">{dayHeading}</h1>
         </div>
-        <DailyRevenueExportButton
-          txns={txns}
-          dateStr={dateStr}
-          fileDateStr={dayStr.split("-").join("_")}
-          totalRevenue={totalRevenue}
-        />
-      </div>
-
-      <div className="mb-5 flex items-center justify-center gap-3">
-        <Link
-          href={`/admin/daily-revenue?day=${dayKey(prevDay)}`}
-          className="grid size-9 place-items-center rounded-lg border border-border bg-card"
-          aria-label="Previous day"
-        >
-          <ChevronLeft className="size-4" />
-        </Link>
-        <span className="font-display text-[16px] font-bold">{dayLabel}</span>
-        {isToday ? (
-          <span className="grid size-9 place-items-center rounded-lg border border-border/50 text-muted-foreground/30">
-            <ChevronRight className="size-4" />
-          </span>
-        ) : (
-          <Link
-            href={`/admin/daily-revenue?day=${dayKey(nextDay)}`}
-            className="grid size-9 place-items-center rounded-lg border border-border bg-card"
-            aria-label="Next day"
-          >
-            <ChevronRight className="size-4" />
-          </Link>
-        )}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/daily-revenue?day=${dayKey(prevDay)}`}
+              className="grid size-9 place-items-center rounded-lg border border-border bg-card"
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="size-4" />
+            </Link>
+            <span className="font-display text-[14px] font-bold">{dayLabel}</span>
+            {isToday ? (
+              <span className="grid size-9 place-items-center rounded-lg border border-border/50 text-muted-foreground/30">
+                <ChevronRight className="size-4" />
+              </span>
+            ) : (
+              <Link
+                href={`/admin/daily-revenue?day=${dayKey(nextDay)}`}
+                className="grid size-9 place-items-center rounded-lg border border-border bg-card"
+                aria-label="Next day"
+              >
+                <ChevronRight className="size-4" />
+              </Link>
+            )}
+          </div>
+          <DailyRevenueExportButton
+            txns={txns}
+            dateStr={dateStr}
+            fileDateStr={dayStr.split("-").join("_")}
+            totalRevenue={totalRevenue}
+          />
+        </div>
       </div>
 
       <div className="mb-5 rounded-[20px] border border-border bg-[linear-gradient(135deg,#141414,#242424)] p-6 text-white shadow-sm">
@@ -215,7 +244,7 @@ export default async function DailyRevenuePage({
                       {t.balanceAmount > 0 ? (
                         <span className="text-energy">{formatINR(t.balanceAmount)}</span>
                       ) : (
-                        <span className="text-muted-foreground">Fully paid</span>
+                        <span className="font-semibold text-brand">Fully Paid</span>
                       )}
                     </td>
                   </tr>

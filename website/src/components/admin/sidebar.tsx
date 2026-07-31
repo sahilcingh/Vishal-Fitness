@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Receipt,
   Users,
+  UserPlus,
   CalendarClock,
   Ticket,
   Megaphone,
@@ -18,7 +19,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
 ] as const;
 
 const MANAGE_ITEMS = [
+  { href: "/admin/add-member", label: "Add Member", icon: UserPlus },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: Users },
   { href: "/admin/classes", label: "Classes", icon: CalendarClock },
   { href: "/admin/passes", label: "Passes", icon: Ticket },
@@ -53,6 +54,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[13.5px] font-semibold transition-colors",
         active
@@ -81,7 +83,7 @@ export function AdminSidebar({ name, email }: { name: string; email: string }) {
     setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   }
 
@@ -103,6 +105,7 @@ export function AdminSidebar({ name, email }: { name: string; email: string }) {
           className="grid size-9 shrink-0 place-items-center rounded-lg border border-sidebar-border md:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
+          aria-expanded={open}
         >
           <Menu className="size-[18px] text-sidebar-foreground" />
         </button>
@@ -136,17 +139,14 @@ export function AdminSidebar({ name, email }: { name: string; email: string }) {
           <div className="truncate text-[12.5px] font-bold text-sidebar-foreground">{name}</div>
           <div className="truncate text-[10.5px] text-sidebar-foreground/50">{email || "Owner"}</div>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <ThemeToggle />
-          <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border disabled:opacity-50"
-            aria-label="Sign out"
-          >
-            <LogOut className="size-4 text-energy" />
-          </button>
-        </div>
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="ml-auto grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border disabled:opacity-50"
+          aria-label="Sign out"
+        >
+          <LogOut className="size-4 text-energy" />
+        </button>
       </div>
     </aside>
   );

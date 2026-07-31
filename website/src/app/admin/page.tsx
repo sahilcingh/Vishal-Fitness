@@ -1,33 +1,56 @@
-import { UserPlus, RefreshCw, TrendingUp, TrendingDown, Bell } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { UserPlus, TrendingUp, TrendingDown, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/format";
+import { nowInIST, istMidnightMs } from "@/lib/ist-time";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
+import { RefreshButton } from "@/components/admin/refresh-button";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Overview — Vishal Fitness Admin",
+};
 
 // Mirrors _safe() in admin_dashboard_screen.dart — one failing query never
 // takes down the rest of the dashboard.
 async function safeSelect<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
   try {
     const { data, error } = await promise;
-    if (error) return [] as T[];
+    if (error) {
+      console.error("admin/page: query failed:", error);
+      return [] as T[];
+    }
     return data ?? ([] as T[]);
-  } catch {
+  } catch (err) {
+    console.error("admin/page: query threw:", err);
     return [] as T[];
   }
 }
 
+// Local-calendar formatting — NOT .toISOString(), which would convert
+// through UTC first and can land on the wrong IST calendar day.
 function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// classes.start_time is stored as a naive local (IST) string with no
+// timezone suffix (matches the Flutter app's own storage format) — compare
+// against the same naive shape rather than a real UTC instant.
+function naiveISO(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 export default async function OverviewPage() {
   const supabase = await createClient();
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nowReal = new Date();
+  const now = nowInIST();
+  const monthStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), 1));
+  const lastMonthStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth() - 1, 1));
+  const todayStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), now.getDate()));
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
 
@@ -54,7 +77,7 @@ export default async function OverviewPage() {
     safeSelect<{ id: string }>(
       supabase.from("subscriptions").select("id").gte("created_at", todayStart.toISOString()),
     ),
-    safeSelect<{ id: string }>(supabase.from("classes").select("id").gt("start_time", now.toISOString())),
+    safeSelect<{ id: string }>(supabase.from("classes").select("id").gt("start_time", naiveISO(now))),
     safeSelect<{ end_date: string }>(
       supabase.from("subscriptions").select("end_date").neq("status", "cancelled"),
     ),
@@ -88,7 +111,7 @@ export default async function OverviewPage() {
   for (const sub of allActiveSubEndDates) {
     const endDate = sub.end_date ? new Date(sub.end_date) : null;
     if (!endDate) continue;
-    const days = Math.floor((endDate.getTime() - now.getTime()) / 86_400_000);
+    const days = Math.floor((endDate.getTime() - nowReal.getTime()) / 86_400_000);
     if (days < 0) expired++;
     else if (days <= 7) critical++;
     else if (days <= 30) expiring++;
@@ -114,18 +137,16 @@ export default async function OverviewPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}
+            {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}
           </div>
           <h1 className="mt-1.5 font-display text-[32px] font-bold leading-none">Overview</h1>
         </div>
         <div className="flex items-center gap-2.5">
-          <button className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand">
+          <Link href="/admin/add-member" className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand">
             <UserPlus className="size-[15px]" />
             Add Member
-          </button>
-          <button className="grid size-[38px] place-items-center rounded-xl border border-border bg-card">
-            <RefreshCw className="size-4 text-muted-foreground" />
-          </button>
+          </Link>
+          <RefreshButton />
         </div>
       </div>
 
@@ -147,9 +168,9 @@ export default async function OverviewPage() {
             )}
           </div>
           <div className="num mt-3.5 font-display text-[38px] font-bold">{formatINR(revenueThisMonth)}</div>
-          <a href="/admin/daily-revenue" className="mt-1 inline-block text-[12px] font-bold text-[#4FE393]">
+          <Link href="/admin/daily-revenue" className="mt-1 inline-block text-[12px] font-bold text-[#4FE393]">
             Day-wise breakdown →
-          </a>
+          </Link>
         </div>
 
         <StatCard label="Active Members" value={activeMembers.toString()} sub={`+${newMembersToday} today`} />
@@ -186,7 +207,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
     <div className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
       <div className="num mt-3.5 font-display text-[26px] font-bold">{value}</div>
-      <div className="mt-1.5 text-[12px] font-semibold text-brand">{sub}</div>
+      <div className="mt-1.5 text-[12px] font-semibold text-muted-foreground">{sub}</div>
     </div>
   );
 }

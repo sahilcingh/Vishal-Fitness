@@ -18,9 +18,13 @@ export function RevenueChart({ days }: { days: RevenueDay[] }) {
         return (
           <div
             key={day.date}
-            className="relative flex h-full flex-1 flex-col items-center justify-end gap-2"
+            tabIndex={0}
+            aria-label={`${day.label}: ${formatINR(day.amount)}`}
+            className="relative flex h-full flex-1 flex-col items-center justify-end gap-2 outline-none"
             onMouseEnter={() => setHovered(i)}
             onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(i)}
+            onBlur={() => setHovered(null)}
           >
             {isToday && (
               <span className="absolute -top-5 text-[8.5px] font-bold tracking-wide text-brand">TODAY</span>
