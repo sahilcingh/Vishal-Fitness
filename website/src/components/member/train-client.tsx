@@ -331,7 +331,7 @@ export function TrainClient({
               }}
               className="flex min-w-0 items-center gap-1.5"
             >
-              <span className="font-display truncate text-[17px] font-bold">{workoutName}</span>
+              <span className="min-w-0 font-display truncate text-[17px] font-bold">{workoutName}</span>
               <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
             </button>
             <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1.5">
@@ -480,7 +480,7 @@ export function TrainClient({
               <EmptyState icon={CalendarX2} title="No upcoming classes" subtitle="Check back later. New classes are added by the gym admin regularly." />
             ) : (
               initialClasses.map((cls) => (
-                <div key={cls.id} className="flex overflow-hidden rounded-[20px] border border-border bg-card">
+                <div key={cls.id} className="card-hover flex overflow-hidden rounded-[20px] border border-border bg-card">
                   <div className="flex flex-col items-center justify-center gap-0.5 px-4 py-4">
                     <span className="num font-display text-[19px] font-bold">{formatClassTime(cls.start_time)}</span>
                     <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{cls.duration_minutes ?? 0}MIN</span>
@@ -547,7 +547,7 @@ export function TrainClient({
               initialSessions.map((s) => {
                 const mins = Math.floor((s.duration_seconds ?? 0) / 60);
                 return (
-                  <div key={s.id} className="flex items-center gap-3.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
+                  <div key={s.id} className="card-hover flex items-center gap-3.5 rounded-[14px] border border-border bg-card px-4 py-3.5">
                     <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-brand/10 text-brand">
                       <History className="size-4" />
                     </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -11,6 +11,7 @@ import {
   Copy,
   Info,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
@@ -29,27 +30,27 @@ type SubHistoryRow = {
 type DialogState =
   | { kind: "error"; message: string }
   | {
-      kind: "memberExists";
-      profile: Profile;
-      subs: SubHistoryRow[];
-      actionLabel: string;
-      tone: "brand" | "sun" | "energy";
-      message: string;
-      suggestedStart: string | null;
-    }
+    kind: "memberExists";
+    profile: Profile;
+    subs: SubHistoryRow[];
+    actionLabel: string;
+    tone: "brand" | "sun" | "energy";
+    message: string;
+    suggestedStart: string | null;
+  }
   | { kind: "blockedDuplicate"; memberName: string; passName: string; startDate: string }
   | { kind: "nearDuplicate"; memberName: string; passName: string; existingStart: string }
   | {
-      kind: "success";
-      name: string;
-      email: string | null;
-      password: string | null;
-      endDate: string;
-      total: number;
-      paid: number;
-      balance: number;
-      existingAccount: boolean;
-    };
+    kind: "success";
+    name: string;
+    email: string | null;
+    password: string | null;
+    endDate: string;
+    total: number;
+    paid: number;
+    balance: number;
+    existingAccount: boolean;
+  };
 
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 const GENDERS = ["Male", "Female", "Other"];
@@ -89,14 +90,23 @@ function prettyDate(s: string) {
   return parseYMD(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function AddMemberForm({ passes }: { passes: Pass[] }) {
+export function AddMemberForm({ passes, initialPhone }: { passes: Pass[]; initialPhone?: string }) {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => (initialPhone && /^\d{10}$/.test(initialPhone) ? initialPhone : ""));
   const [email, setEmail] = useState("");
   const [gender, setGender] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
+
+  // Live "does this member already exist" check, fired the moment the admin
+  // leaves the phone field - lets them see who this is and what will happen
+  // (renew vs. add-new) before they've even picked a plan, instead of being
+  // surprised by a popup after filling out the whole form and submitting.
+  const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
+  const [existingSubs, setExistingSubs] = useState<SubHistoryRow[]>([]);
+  const [checkedPhone, setCheckedPhone] = useState("");
+  const [checkingPhone, setCheckingPhone] = useState(false);
 
   const [passId, setPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
@@ -105,6 +115,10 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   const [isPercent, setIsPercent] = useState(false);
   const [discount, setDiscount] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
+  // Deliberately independent of `startDate` - a payment can be collected on a
+  // different day than the membership actually starts (e.g. paid today for a
+  // pass that starts next week, or a cash payment recorded a day late).
+  const [paymentDate, setPaymentDate] = useState(toYMD(new Date()));
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
 
@@ -114,6 +128,20 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [dialog, setDialog] = useState<DialogState | null>(null);
+
+  const isRenewing = existingProfile !== null && checkedPhone === phone.trim();
+
+  // If we arrived here with a phone number pre-filled (the "Add as New
+  // Member" handoff from the Update Membership quick-check on Overview,
+  // which already confirmed this number wasn't found), re-verify it once on
+  // mount - cheap, and guards against the number having been registered by
+  // someone else in the meantime.
+  useEffect(() => {
+    if (initialPhone && /^\d{10}$/.test(initialPhone)) {
+      checkPhone();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only, using whatever initialPhone was passed at mount time
+  }, []);
 
   const selectedPass = passes.find((p) => p.id === passId) ?? null;
   const extraDaysNum = parseInt(extraDays, 10) || 0;
@@ -149,12 +177,16 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
     setEmail("");
     setGender("");
     setTimeSlot("");
+    setExistingProfile(null);
+    setExistingSubs([]);
+    setCheckedPhone("");
     setPassId("");
     setStartDate(toYMD(new Date()));
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
     setPaidAmount("");
+    setPaymentDate(toYMD(new Date()));
     setPaymentMethod("Cash");
     setNotes("");
     setPhotoFile(null);
@@ -250,6 +282,37 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
     return data ?? [];
   }
 
+  // Fires on blur of the phone field (not on every keystroke - a plain
+  // lookup-on-leave is simplest and matches how most billing/CRM tools do
+  // this, e.g. Stripe Checkout / Shopify recognizing a returning customer's
+  // email as soon as they tab away from it).
+  async function checkPhone() {
+    const trimmed = phone.trim();
+    if (!/^\d{10}$/.test(trimmed)) {
+      setExistingProfile(null);
+      setExistingSubs([]);
+      setCheckedPhone("");
+      return;
+    }
+    setCheckingPhone(true);
+    try {
+      const found = await fetchExistingByPhone(trimmed);
+      setExistingProfile(found);
+      setCheckedPhone(trimmed);
+      if (found) {
+        const subs = await fetchSubHistory(found.id);
+        setExistingSubs(subs);
+        // Prefill what we already know about them so the admin doesn't have
+        // to retype it.
+        if (found.full_name) setName(found.full_name);
+      } else {
+        setExistingSubs([]);
+      }
+    } finally {
+      setCheckingPhone(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -267,6 +330,20 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
 
     setIsSubmitting(true);
     try {
+      // If the live phone-blur check already found (and is still fresh for)
+      // this exact phone number, the admin has already seen the "Existing
+      // member" banner and the button they just pressed already says
+      // Renew/Continue - proceed straight there instead of interrupting them
+      // with a popup that would just repeat what they already saw.
+      if (isRenewing && existingProfile) {
+        await handleAddSubscriptionToExisting(existingProfile);
+        return;
+      }
+
+      // Fallback safety net for the rare case the live check never ran
+      // (e.g. the phone field was never blurred before submitting) - same
+      // behavior as before, so an existing member still can't silently end
+      // up with a duplicate account.
       const existing = await fetchExistingByPhone(phone.trim());
       if (existing) {
         const subs = await fetchSubHistory(existing.id);
@@ -347,7 +424,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
           subscription_id: latestSub.id,
           user_id: userId,
           amount: safePaidAmount,
-          payment_date: toYMD(new Date()),
+          payment_date: paymentDate,
           payment_method: paymentMethod.toLowerCase(),
           notes: notes.trim() || "Initial payment at enrollment",
         });
@@ -479,7 +556,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
           subscription_id: sub.id,
           user_id: profile.id,
           amount: safePaidAmount,
-          payment_date: toYMD(new Date()),
+          payment_date: paymentDate,
           payment_method: paymentMethod.toLowerCase(),
           notes: notes.trim() || "Payment at re-enrollment",
         });
@@ -533,6 +610,15 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
   return (
     <>
       <form onSubmit={handleSubmit} className="rounded-[20px] border border-border bg-card p-6 shadow-sm sm:p-7">
+        {initialPhone && /^\d{10}$/.test(initialPhone) && !isRenewing && (
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-aqua/25 bg-aqua/6 px-3.5 py-3">
+            <Info className="size-5 shrink-0 text-aqua" />
+            <div className="text-[13px] text-foreground">
+              Continuing from Update Membership <span className="font-bold">{initialPhone}</span>{" "}
+              wasn&apos;t found, so fill in their details below to add them as a new member.
+            </div>
+          </div>
+        )}
         <div className="flex justify-center">
           <label className="relative cursor-pointer">
             <div className="grid size-24 place-items-center overflow-hidden rounded-full border-2 border-brand/25 bg-brand/8">
@@ -561,7 +647,15 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
             label="Phone Number *"
             hint="e.g. 9876543210"
             value={phone}
-            onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+            onChange={(v) => {
+              setPhone(v.replace(/\D/g, "").slice(0, 10));
+              // The old lookup no longer matches once the number changes -
+              // clear it immediately so a stale "Existing member" banner
+              // can't linger under a phone number that's since been edited.
+              setExistingProfile(null);
+              setCheckedPhone("");
+            }}
+            onBlur={checkPhone}
             inputMode="numeric"
             error={fieldErrors.phone}
           />
@@ -571,6 +665,35 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
             <Field label="Time Slot (optional)" hint="e.g. 6:00 AM - 8:00 AM" value={timeSlot} onChange={setTimeSlot} />
           </div>
         </div>
+
+        {checkingPhone && (
+          <div className="mt-3 flex items-center gap-2 text-[12.5px] text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Checking phone number...
+          </div>
+        )}
+
+        {existingProfile && checkedPhone === phone.trim() && (
+          <div className="mt-3 flex items-center gap-3 rounded-xl border border-brand/25 bg-brand/6 px-3.5 py-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-brand/15 font-display text-[12px] font-bold text-brand">
+              {(existingProfile.full_name || name)
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase())
+                .join("")}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13.5px] font-bold">
+                Existing member: {existingProfile.full_name || "Unnamed"}
+              </div>
+              <div className="text-[12px] text-muted-foreground">
+                {computeMemberExistsDialog(existingSubs).message}
+              </div>
+            </div>
+          </div>
+        )}
 
         <SectionLabel>Membership</SectionLabel>
         <div className="flex flex-col gap-3.5">
@@ -625,7 +748,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
             <Field
               label="Amount Paid Now (₹)"
               hint="e.g. 1500"
@@ -633,6 +756,13 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
               onChange={(v) => setPaidAmount(v.replace(/[^\d.]/g, ""))}
               inputMode="decimal"
               error={fieldErrors.paidAmount}
+            />
+            <Field
+              label="Date of Payment"
+              type="date"
+              value={paymentDate}
+              onChange={setPaymentDate}
+              max={toYMD(new Date())}
             />
             <Dropdown label="Payment Method" value={paymentMethod} onChange={setPaymentMethod} options={PAYMENT_METHODS} optionLabel={(m) => m} />
             <Field label="Payment Note (optional)" hint="e.g. Paid by father" value={notes} onChange={setNotes} />
@@ -653,10 +783,16 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-7 flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand py-3.5 text-[15px] font-bold text-on-brand disabled:opacity-50"
+          className="btn-shine mt-7 flex w-full items-center justify-center gap-2 rounded-[14px] bg-brand py-3.5 text-[15px] font-bold text-on-brand disabled:opacity-50"
         >
           {!isSubmitting && <Check className="size-4" />}
-          {isSubmitting ? "Adding…" : "Add Member"}
+          {isRenewing
+            ? isSubmitting
+              ? "Renewing…"
+              : "Renew Membership"
+            : isSubmitting
+              ? "Adding…"
+              : "Add Member"}
         </button>
       </form>
 
@@ -777,9 +913,8 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
                   if (suggested) setStartDate(suggested);
                   handleAddSubscriptionToExisting(profile);
                 }}
-                className={`flex-1 rounded-xl py-2.5 text-[14px] font-bold text-[#0F0F0F] ${
-                  dialog.tone === "brand" ? "bg-brand text-white" : dialog.tone === "sun" ? "bg-sun" : "bg-energy text-white"
-                }`}
+                className={`flex-1 rounded-xl py-2.5 text-[14px] font-bold text-[#0F0F0F] ${dialog.tone === "brand" ? "bg-brand text-white" : dialog.tone === "sun" ? "bg-sun" : "bg-energy text-white"
+                  }`}
               >
                 {dialog.actionLabel}
               </button>
@@ -789,7 +924,7 @@ export function AddMemberForm({ passes }: { passes: Pass[] }) {
       </Modal>
 
       {/* Success */}
-      <Modal open={dialog?.kind === "success"} onClose={() => {}} dismissible={false}>
+      <Modal open={dialog?.kind === "success"} onClose={() => { }} dismissible={false}>
         {dialog?.kind === "success" && (
           <>
             <DialogHeader icon={Check} tone="brand" title={dialog.existingAccount ? "Subscription Added!" : "Member Added!"} />
@@ -859,16 +994,20 @@ function Field({
   hint,
   value,
   onChange,
+  onBlur,
   inputMode,
   type,
+  max,
   error,
 }: {
   label: string;
   hint?: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   type?: string;
+  max?: string;
   error?: string;
 }) {
   return (
@@ -878,12 +1017,13 @@ function Field({
         type={type ?? "text"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         placeholder={hint}
         inputMode={inputMode}
+        max={max}
         aria-invalid={!!error}
-        className={`h-11 w-full rounded-xl border bg-background px-3.5 text-[13.5px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 ${
-          error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
-        }`}
+        className={`h-11 w-full rounded-xl border bg-background px-3.5 text-[13.5px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 ${error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
+          }`}
       />
       {error && <div className="mt-1 text-[11.5px] font-medium text-danger">{error}</div>}
     </label>
@@ -913,9 +1053,8 @@ function Dropdown<T extends string>({
           value={value}
           onChange={(e) => onChange(e.target.value as T)}
           aria-invalid={!!error}
-          className={`h-11 w-full appearance-none rounded-xl border bg-background px-3.5 pr-9 text-[13.5px] font-medium outline-none ${
-            error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
-          }`}
+          className={`h-11 w-full appearance-none rounded-xl border bg-background px-3.5 pr-9 text-[13.5px] font-medium outline-none ${error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
+            }`}
         >
           {options.map((o) => (
             <option key={o} value={o}>
@@ -960,9 +1099,8 @@ function Segmented({
           type="button"
           onClick={() => onChange(false)}
           aria-pressed={!value}
-          className={`flex-1 rounded-xl border py-2.5 text-[12.5px] font-bold ${
-            !value ? "border-brand bg-brand text-on-brand" : "border-border text-muted-foreground"
-          }`}
+          className={`flex-1 rounded-xl border py-2.5 text-[12.5px] font-bold ${!value ? "border-brand bg-brand text-on-brand" : "border-border text-muted-foreground"
+            }`}
         >
           {options[0]}
         </button>
@@ -970,9 +1108,8 @@ function Segmented({
           type="button"
           onClick={() => onChange(true)}
           aria-pressed={value}
-          className={`flex-1 rounded-xl border py-2.5 text-[12.5px] font-bold ${
-            value ? "border-brand bg-brand text-on-brand" : "border-border text-muted-foreground"
-          }`}
+          className={`flex-1 rounded-xl border py-2.5 text-[12.5px] font-bold ${value ? "border-brand bg-brand text-on-brand" : "border-border text-muted-foreground"
+            }`}
         >
           {options[1]}
         </button>

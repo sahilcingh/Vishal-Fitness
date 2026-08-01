@@ -172,7 +172,7 @@ export function ClassesManager({ classes }: { classes: ClassRow[] }) {
         </div>
         <button
           onClick={openAdd}
-          className="flex shrink-0 items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
+          className="btn-shine flex shrink-0 items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
         >
           <Plus className="size-4" />
           Add Class
@@ -197,12 +197,12 @@ export function ClassesManager({ classes }: { classes: ClassRow[] }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {pageItems.map((c) => (
-            <div key={c.id} className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
+            <div key={c.id} className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="font-display text-[17px] font-bold leading-snug">{c.title}</h3>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-2">
                   <button
                     onClick={() => openEdit(c)}
                     className="grid size-8 place-items-center rounded-lg text-brand hover:bg-brand/10"

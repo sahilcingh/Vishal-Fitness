@@ -233,7 +233,7 @@ export default async function PassPage() {
                 No visits yet. Check in to start your streak.
               </div>
             ) : (
-              <div className="flex flex-col rounded-[20px] border border-border/50 bg-card px-5 py-1">
+              <div className="card-hover flex flex-col rounded-[20px] border border-border/50 bg-card px-5 py-1">
                 {checkIns.map((c, i) => (
                   <div key={c.id} className={`flex items-center justify-between py-3 ${i !== 0 ? "border-t border-border/40" : ""}`}>
                     <div className="flex items-center gap-2.5">

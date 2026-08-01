@@ -67,7 +67,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-150"
       onClick={dismissible ? onClose : undefined}
     >
       <div
@@ -75,7 +75,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className={`max-h-[90vh] w-full ${maxWidthClass} overflow-y-auto rounded-[20px] border border-border bg-card p-6 shadow-2xl outline-none`}
+        className={`max-h-[90vh] w-full ${maxWidthClass} overflow-y-auto rounded-[20px] border border-border bg-card p-6 shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

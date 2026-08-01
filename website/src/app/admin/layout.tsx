@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { PageTransition } from "@/components/page-transition";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -31,7 +32,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <AdminSidebar name={fullName ?? "Admin"} email={user?.email ?? ""} />
-      <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 py-7 md:px-8">{children}</main>
+      <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 py-7 md:px-8">
+        <PageTransition>{children}</PageTransition>
+      </main>
     </div>
   );
 }

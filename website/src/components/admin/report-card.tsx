@@ -80,7 +80,11 @@ export function ReportCard({
   }
 
   return (
-    <div className="flex flex-col rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <div
+      className={`card-hover flex flex-col rounded-[20px] border border-border bg-card p-4 shadow-sm ${
+        open ? "md:col-span-2 xl:col-span-3" : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[13.5px] font-bold leading-snug">{title}</div>

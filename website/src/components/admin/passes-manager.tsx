@@ -83,7 +83,7 @@ export function PassesManager({ passes }: { passes: GymPass[] }) {
         <button
           type="button"
           onClick={() => setFormPass("new")}
-          className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
+          className="btn-shine flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
         >
           <Plus className="size-[15px]" />
           Add Pass
@@ -105,7 +105,7 @@ export function PassesManager({ passes }: { passes: GymPass[] }) {
           {normalizedQuery ? `No results for "${query.trim()}".` : "No passes configured."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {pageItems.map((pass) => (
             <PassCard
               key={pass.id}
@@ -153,7 +153,7 @@ function PassCard({
 }) {
   const features = pass.features ?? [];
   return (
-    <div className={`rounded-[20px] border border-border bg-card p-5 shadow-sm ${pass.is_active ? "" : "opacity-60"}`}>
+    <div className={`card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm ${pass.is_active ? "" : "opacity-60"}`}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="min-w-0 truncate font-display text-[20px] font-bold leading-tight">{pass.name}</h3>
         <div className="flex shrink-0 items-center gap-3">

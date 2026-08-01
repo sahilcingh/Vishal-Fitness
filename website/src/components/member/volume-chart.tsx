@@ -33,7 +33,7 @@ export function VolumeChart({ days }: { days: VolumeDay[] }) {
               </div>
             )}
             <div
-              className={`w-full max-w-[16px] rounded-t-md transition-colors ${
+              className={`w-full max-w-[16px] rounded-t-md transition-[background-color,height] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                 day.volume > 0 ? "bg-brand/70 hover:bg-brand" : "bg-border/60"
               }`}
               style={{ height: `${day.volume > 0 ? Math.max(pct, 4) : 4}%` }}

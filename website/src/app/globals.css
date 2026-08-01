@@ -161,3 +161,112 @@
     font-feature-settings: "tnum", "cv11";
   }
 }
+
+/* ---------- Motion ----------
+   Mirrors the motion language already defined in the design reference
+   (Vishal Fitness — Admin Web.html): same keyframes, durations, and easing
+   curves, applied here to the actual app instead of the static mockup. */
+
+/* Matches the design's ".panel.is-active" transition exactly (admin-section
+   panel switches: subtle, fast). */
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Matches the design's ".member-panel.is-active" transition exactly (member
+   portal panel switches: a bit more pronounced, springier). */
+@keyframes panel-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-in {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes icon-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-3px) scale(1.12);
+  }
+  65% {
+    transform: translateY(1px) scale(1);
+  }
+}
+
+/* Applied to a route's main content, re-keyed on the pathname by
+   PageTransition (admin) / the pathname key on <main> (member) so it
+   replays on every navigation - this is what makes moving between pages
+   read as a deliberate transition instead of an instant, static swap. */
+.page-fade-admin {
+  animation: panel-fade 0.2s ease;
+}
+.page-fade-member {
+  animation: panel-fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Shared card hover-lift, matching .plan-card/.class-card/.quick-pill in the
+   design reference exactly (same transform distance, shadow, and timing). */
+.card-hover {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.14);
+}
+
+/* Diagonal shine sweep on primary CTA buttons, matching .btn-primary/.w-cta
+   in the design reference. */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -60%;
+  width: 40%;
+  z-index: 1;
+  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.75s ease;
+}
+.btn-shine:hover::after {
+  left: 130%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-admin,
+  .page-fade-member,
+  .card-hover,
+  .btn-shine::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .card-hover:hover {
+    transform: none;
+  }
+}

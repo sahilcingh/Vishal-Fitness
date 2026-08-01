@@ -311,7 +311,7 @@ export default async function WelcomePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-5 grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {passes.map((p, i) => (
                 <PassCard key={p.id} pass={p} index={i} isLast={i === passes.length - 1 && passes.length > 1} />
               ))}
@@ -448,7 +448,7 @@ function PassCard({ pass, index, isLast }: { pass: Pass; index: number; isLast: 
               {features.slice(0, 3).map((f) => (
                 <li key={f} className="flex items-center gap-2 text-[11.5px] text-white/90">
                   <span className="size-1 shrink-0 rounded-full bg-white/70" />
-                  <span className="truncate">{f}</span>
+                  <span className="min-w-0 flex-1 truncate">{f}</span>
                 </li>
               ))}
             </ul>

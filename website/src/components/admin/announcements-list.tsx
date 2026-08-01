@@ -156,12 +156,12 @@ export function AnnouncementsList({ announcements }: { announcements: Announceme
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid items-start grid-cols-1 gap-4 lg:grid-cols-2">
           {pageItems.map((a) => {
             const isActive = !!a.is_active;
             const isPending = pendingIds.has(a.id);
             return (
-              <div key={a.id} className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
+              <div key={a.id} className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="min-w-0 flex-1 font-display text-[18px] font-bold leading-snug">{a.title}</h3>
                   <div className="flex shrink-0 items-center gap-3">

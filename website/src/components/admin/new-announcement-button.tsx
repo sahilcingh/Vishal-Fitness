@@ -64,7 +64,7 @@ export function NewAnnouncementButton({ createdBy }: { createdBy: string | null 
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
+        className="btn-shine flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand"
       >
         <Plus className="size-[15px]" />
         New Announcement

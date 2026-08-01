@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sparkles, Flame, TrendingUp, CalendarDays, CalendarCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { nowInIST, istDayKey } from "@/lib/ist-time";
+import { CountUp } from "@/components/count-up";
 
 export const metadata: Metadata = { title: "Today" };
 export const dynamic = "force-dynamic";
@@ -131,7 +132,7 @@ export default async function TodayPage() {
           </div>
           <div className="mt-2 flex items-baseline gap-3">
             <span className="num font-display bg-gradient-to-br from-energy to-pulse bg-clip-text text-[56px] font-bold leading-none text-transparent">
-              {streak}
+              <CountUp value={streak} />
             </span>
             <span className="text-[16px] font-semibold text-white">days on fire</span>
           </div>
@@ -144,8 +145,8 @@ export default async function TodayPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
-          <StatCard label="Week Volume" value={`${Math.round(weekVolume).toLocaleString("en-IN")} kg`} icon={TrendingUp} color="bg-aqua" />
-          <StatCard label="Sessions / 7d" value={String(weekSessions)} icon={CalendarDays} color="bg-pulse" />
+          <StatCard label="Week Volume" value={<><CountUp value={Math.round(weekVolume)} /> kg</>} icon={TrendingUp} color="bg-aqua" />
+          <StatCard label="Sessions / 7d" value={<CountUp value={weekSessions} />} icon={CalendarDays} color="bg-pulse" />
         </div>
       </div>
 
@@ -162,7 +163,7 @@ export default async function TodayPage() {
               {upcomingClasses.map((c, i) => {
                 const start = new Date(c.start_time);
                 return (
-                  <div key={i} className="flex overflow-hidden rounded-[20px] border border-border/50 bg-card">
+                  <div key={i} className="card-hover flex overflow-hidden rounded-[20px] border border-border/50 bg-card">
                     <div className="w-1 shrink-0 bg-gradient-to-b from-brand to-aqua" />
                     <div className="flex flex-col items-center justify-center px-4 py-4">
                       <span className="font-display text-[20px] font-bold">
@@ -200,12 +201,12 @@ function StatCard({
   color,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[20px] border border-border bg-card p-5 shadow-sm">
+    <div className="card-hover relative overflow-hidden rounded-[20px] border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between">
         <span className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">{label}</span>
         <span className={`grid size-7 shrink-0 place-items-center rounded-full ${color}`}>

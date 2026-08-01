@@ -35,7 +35,7 @@ export function RevenueChart({ days }: { days: RevenueDay[] }) {
               </div>
             )}
             <div
-              className={`w-full max-w-[26px] rounded-t-md transition-colors ${
+              className={`w-full max-w-[26px] rounded-t-md transition-[background-color,height] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                 isToday ? "bg-brand" : "bg-brand/25 hover:bg-brand/50"
               }`}
               style={{ height: `${pct}%` }}

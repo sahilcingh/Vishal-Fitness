@@ -3,6 +3,7 @@ import { Sparkles, Activity, Clock, Trophy, History, Dumbbell } from "lucide-rea
 import { createClient } from "@/lib/supabase/server";
 import { nowInIST, istDayKey } from "@/lib/ist-time";
 import { VolumeChart, type VolumeDay } from "@/components/member/volume-chart";
+import { CountUp } from "@/components/count-up";
 
 export const metadata: Metadata = { title: "Progress" };
 export const dynamic = "force-dynamic";
@@ -174,7 +175,9 @@ export default async function ProgressPage() {
           <div className="relative">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Total Volume</div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="num font-display text-[42px] font-bold leading-none text-brand">{fmtNum(totalVolume)}</span>
+              <span className="num font-display text-[42px] font-bold leading-none text-brand">
+                <CountUp value={totalVolume} />
+              </span>
               <span className="text-[15px] text-muted-foreground">kg lifted</span>
             </div>
             <div className="mt-8">
@@ -184,13 +187,13 @@ export default async function ProgressPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-3 lg:grid-cols-1">
-          <StatTile icon={Activity} label="Sessions" value={String(sessionCount)} accent="bg-brand/12 text-brand" />
-          <StatTile icon={Clock} label="Minutes" value={String(Math.round(totalMinutes))} accent="bg-pulse/12 text-pulse" />
-          <StatTile icon={Trophy} label="Best Day" value={bestDay > 0 ? fmtNum(bestDay) : "-"} accent="bg-energy/12 text-energy" />
+          <StatTile icon={Activity} label="Sessions" value={<CountUp value={sessionCount} />} accent="bg-brand/12 text-brand" />
+          <StatTile icon={Clock} label="Minutes" value={<CountUp value={Math.round(totalMinutes)} />} accent="bg-pulse/12 text-pulse" />
+          <StatTile icon={Trophy} label="Best Day" value={bestDay > 0 ? <CountUp value={bestDay} /> : "-"} accent="bg-energy/12 text-energy" />
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="mt-8 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <ListSection icon={Trophy} iconColor="text-sun" title="Personal Records">
           {personalRecords.length === 0 ? (
             <EmptyRow text="No personal records yet." />
@@ -270,11 +273,11 @@ function StatTile({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  value: string;
+  value: React.ReactNode;
   accent: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <div className="card-hover relative overflow-hidden rounded-[20px] border border-border bg-card p-4 shadow-sm">
       <span className={`grid size-7 place-items-center rounded-full ${accent}`}>
         <Icon className="size-3.5" />
       </span>
@@ -301,7 +304,7 @@ function ListSection({
         <Icon className={`size-4 ${iconColor}`} />
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</span>
       </div>
-      <div className="mt-3 divide-y divide-border/30 rounded-[20px] border border-border bg-card">{children}</div>
+      <div className="card-hover mt-3 divide-y divide-border/30 rounded-[20px] border border-border bg-card">{children}</div>
     </div>
   );
 }

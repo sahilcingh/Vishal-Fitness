@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/format";
 import { nowInIST } from "@/lib/ist-time";
 import { DailyRevenueExportButton } from "@/components/admin/daily-revenue-export-button";
+import { CountUp } from "@/components/count-up";
 
 export const dynamic = "force-dynamic";
 
@@ -190,7 +191,9 @@ export default async function DailyRevenuePage({
 
       <div className="mb-5 rounded-[20px] border border-border bg-[linear-gradient(135deg,#141414,#242424)] p-6 text-white shadow-sm">
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Total Revenue</div>
-        <div className="num mt-2 font-display text-[40px] font-bold">{formatINR(totalRevenue)}</div>
+        <div className="num mt-2 font-display text-[40px] font-bold">
+          <CountUp value={totalRevenue} format="inr" />
+        </div>
         <div className="mt-1 text-[12px] text-white/60">
           {txns.length} payment{txns.length === 1 ? "" : "s"} recorded
         </div>

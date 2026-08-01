@@ -114,7 +114,9 @@ export function MemberShell({
         </div>
       </aside>
 
-      <main className="mx-auto w-full max-w-[900px] flex-1 px-5 py-7 md:px-8">{children}</main>
+      <main key={pathname} className="page-fade-member mx-auto w-full max-w-[900px] flex-1 px-5 py-7 md:px-8">
+        {children}
+      </main>
 
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} name={name} photoUrl={photoUrl} />
     </div>

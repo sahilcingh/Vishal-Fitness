@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CalendarRange, IndianRupee, UserCheck, UserSearch, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { formatINR } from "@/lib/format";
 import { nowInIST, istMidnightMs } from "@/lib/ist-time";
 import { ReportCard, type ReportColumn, type ReportRow } from "@/components/admin/report-card";
+import { CountUp } from "@/components/count-up";
 
 export const dynamic = "force-dynamic";
 
@@ -497,7 +497,7 @@ export default async function ReportsPage() {
 
       <Link
         href="/admin/daily-revenue"
-        className="mb-5 flex items-center gap-3.5 rounded-[20px] border border-border bg-[linear-gradient(135deg,#141414,#242424)] p-4 text-white shadow-sm"
+        className="card-hover mb-5 flex items-center gap-3.5 rounded-[20px] border border-border bg-[linear-gradient(135deg,#141414,#242424)] p-4 text-white shadow-sm"
       >
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand/15">
           <CalendarRange className="size-5 text-brand" />
@@ -510,15 +510,15 @@ export default async function ReportsPage() {
         </span>
       </Link>
 
-      <div className="mb-6 grid grid-cols-2 gap-3.5 md:grid-cols-4 xl:grid-cols-8">
-        <SnapshotStat label="Active Members" value={activeCount.toString()} />
-        <SnapshotStat label="Expired Members" value={expiredCount.toString()} />
-        <SnapshotStat label="New This Month" value={newThisMonthCount.toString()} />
-        <SnapshotStat label="Today's Collection" value={formatINR(dailyCollectionGrand)} />
-        <SnapshotStat label="Monthly Collection" value={formatINR(monthlyCollectionGrand)} />
-        <SnapshotStat label="Outstanding" value={formatINR(outstandingTotal)} />
-        <SnapshotStat label="Today's Check-ins" value={dailyAttendanceRows.length.toString()} />
-        <SnapshotStat label="Inactive (30d)" value={inactiveCount.toString()} />
+      <div className="mb-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
+        <SnapshotStat label="Active Members" value={activeCount} />
+        <SnapshotStat label="Expired Members" value={expiredCount} />
+        <SnapshotStat label="New This Month" value={newThisMonthCount} />
+        <SnapshotStat label="Today's Collection" value={dailyCollectionGrand} format="inr" />
+        <SnapshotStat label="Monthly Collection" value={monthlyCollectionGrand} format="inr" />
+        <SnapshotStat label="Outstanding" value={outstandingTotal} format="inr" />
+        <SnapshotStat label="Today's Check-ins" value={dailyAttendanceRows.length} />
+        <SnapshotStat label="Inactive (30d)" value={inactiveCount} />
       </div>
 
       <Section title="Membership Reports" tone="brand" icon={Users}>
@@ -690,11 +690,13 @@ export default async function ReportsPage() {
   );
 }
 
-function SnapshotStat({ label, value }: { label: string; value: string }) {
+function SnapshotStat({ label, value, format }: { label: string; value: number; format?: "inr" }) {
   return (
-    <div className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <div className="card-hover rounded-[20px] border border-border bg-card p-4 shadow-sm">
       <div className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      <div className="num mt-2 font-display text-[19px] font-bold">{value}</div>
+      <div className="num mt-2 font-display text-[19px] font-bold">
+        <CountUp value={value} format={format} />
+      </div>
     </div>
   );
 }
@@ -725,7 +727,7 @@ function Section({
         </span>
         <h2 className="font-display text-[17px] font-bold">{title}</h2>
       </div>
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid items-start grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3">{children}</div>
     </div>
   );
 }

@@ -2,16 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UserPlus, TrendingUp, TrendingDown, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { formatINR } from "@/lib/format";
 import { nowInIST, istMidnightMs } from "@/lib/ist-time";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
 import { RefreshButton } from "@/components/admin/refresh-button";
+import { QuickRenewButton } from "@/components/admin/quick-renew-button";
+import { CountUp } from "@/components/count-up";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Overview - Vishal Fitness Admin",
 };
+
+type Pass = { id: string; name: string; price: number; duration_days: number };
 
 // Mirrors _safe() in admin_dashboard_screen.dart - one failing query never
 // takes down the rest of the dashboard.
@@ -62,6 +65,7 @@ export default async function OverviewPage() {
     upcomingClassesRows,
     allActiveSubEndDates,
     paymentsLast14Days,
+    passes,
   ] = await Promise.all([
     safeSelect<{ id: string }>(supabase.from("subscriptions").select("id").eq("status", "active")),
     safeSelect<{ amount: number }>(
@@ -86,6 +90,9 @@ export default async function OverviewPage() {
         .from("payments")
         .select("amount, payment_date")
         .gte("payment_date", dayKey(fourteenDaysAgo)),
+    ),
+    safeSelect<Pass>(
+      supabase.from("gym_passes").select("id, name, price, duration_days").eq("is_active", true).order("duration_days", { ascending: true }),
     ),
   ]);
 
@@ -142,7 +149,8 @@ export default async function OverviewPage() {
           <h1 className="mt-1.5 font-display text-[32px] font-bold leading-none">Overview</h1>
         </div>
         <div className="flex items-center gap-2.5">
-          <Link href="/admin/add-member" className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand">
+          <QuickRenewButton passes={passes} />
+          <Link href="/admin/add-member" className="btn-shine flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-bold text-on-brand">
             <UserPlus className="size-[15px]" />
             Add Member
           </Link>
@@ -167,15 +175,17 @@ export default async function OverviewPage() {
               </span>
             )}
           </div>
-          <div className="num mt-3.5 font-display text-[38px] font-bold">{formatINR(revenueThisMonth)}</div>
+          <div className="num mt-3.5 font-display text-[38px] font-bold">
+            <CountUp value={revenueThisMonth} format="inr" />
+          </div>
           <Link href="/admin/daily-revenue" className="mt-1 inline-block text-[12px] font-bold text-[#4FE393]">
             Day-wise breakdown →
           </Link>
         </div>
 
-        <StatCard label="Active Members" value={activeMembers.toString()} sub={`+${newMembersToday} today`} />
-        <StatCard label="New Today" value={newMembersToday.toString()} sub="Since midnight" />
-        <StatCard label="Upcoming Classes" value={upcomingClasses.toString()} sub="Next 7 days" />
+        <StatCard label="Active Members" value={activeMembers} sub={`+${newMembersToday} today`} />
+        <StatCard label="New Today" value={newMembersToday} sub="Since midnight" />
+        <StatCard label="Upcoming Classes" value={upcomingClasses} sub="Next 7 days" />
       </div>
 
       <div className="mb-4 rounded-[20px] border border-border bg-card p-5 shadow-sm">
@@ -202,11 +212,13 @@ export default async function OverviewPage() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+function StatCard({ label, value, sub }: { label: string; value: number; sub: string }) {
   return (
-    <div className="rounded-[20px] border border-border bg-card p-5 shadow-sm">
+    <div className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
-      <div className="num mt-3.5 font-display text-[26px] font-bold">{value}</div>
+      <div className="num mt-3.5 font-display text-[26px] font-bold">
+        <CountUp value={value} />
+      </div>
       <div className="mt-1.5 text-[12px] font-semibold text-muted-foreground">{sub}</div>
     </div>
   );
@@ -221,7 +233,9 @@ const TONE_CLASSES = {
 function AlertChip({ count, label, tone }: { count: number; label: string; tone: keyof typeof TONE_CLASSES }) {
   return (
     <div className={`flex-1 rounded-xl px-3.5 py-3 ${TONE_CLASSES[tone]}`}>
-      <div className="num font-display text-[21px] font-bold">{count}</div>
+      <div className="num font-display text-[21px] font-bold">
+        <CountUp value={count} />
+      </div>
       <div className="text-[10px] font-bold uppercase tracking-wide">{label}</div>
     </div>
   );

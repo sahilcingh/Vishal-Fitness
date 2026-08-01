@@ -25,7 +25,12 @@ type RecentMemberRow = {
   }[];
 };
 
-export default async function AddMemberPage() {
+export default async function AddMemberPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ phone?: string }>;
+}) {
+  const { phone: initialPhone } = await searchParams;
   const supabase = await createClient();
 
   const [{ data: passes }, { data: recentMembers }] = await Promise.all([
@@ -51,7 +56,7 @@ export default async function AddMemberPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-        <AddMemberForm passes={passes ?? []} />
+        <AddMemberForm passes={passes ?? []} initialPhone={initialPhone} />
         <RecentAdditions members={recentMembers ?? []} passes={passes ?? []} />
       </div>
     </div>
