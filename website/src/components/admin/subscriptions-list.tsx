@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -60,9 +60,25 @@ export function SubscriptionsList({
   nowMs: number;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Search + pass-type filter + page live in the URL, not just component
+  // state - otherwise navigating to a member's Ledger and clicking Back
+  // remounts this list at page 1 with the filters cleared, since this
+  // component's local state doesn't survive that route change and back.
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
+  const [selectedType, setSelectedType] = useState<string | null>(() => searchParams.get("type"));
+  const [page, setPage] = useState(() => Number(searchParams.get("page")) || 1);
+
+  function syncUrl(nextSearch: string, nextType: string | null, nextPage: number) {
+    const params = new URLSearchParams();
+    if (nextSearch) params.set("search", nextSearch);
+    if (nextType) params.set("type", nextType);
+    if (nextPage > 1) params.set("page", String(nextPage));
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [memberEmails, setMemberEmails] = useState<Record<string, string | null>>({});
   const [resetting, setResetting] = useState<Set<string>>(new Set());
@@ -181,6 +197,7 @@ export function SubscriptionsList({
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
+            syncUrl(e.target.value, selectedType, 1);
           }}
           placeholder="Search by name, phone or MBR..."
           className="w-full rounded-xl border border-border bg-card py-2.5 pl-10 pr-4 text-[14px] outline-none focus:border-brand"
@@ -196,6 +213,7 @@ export function SubscriptionsList({
             onClick={() => {
               setSelectedType(null);
               setPage(1);
+              syncUrl(search, null, 1);
             }}
           />
           {passTypes.map((type) => (
@@ -205,8 +223,10 @@ export function SubscriptionsList({
               count={subscriptions.filter((s) => s.gym_passes?.name === type).length}
               active={selectedType === type}
               onClick={() => {
-                setSelectedType(selectedType === type ? null : type);
+                const next = selectedType === type ? null : type;
+                setSelectedType(next);
                 setPage(1);
+                syncUrl(search, next, 1);
               }}
             />
           ))}
@@ -408,7 +428,14 @@ export function SubscriptionsList({
         </div>
       )}
 
-      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={(next) => {
+          setPage(next);
+          syncUrl(search, selectedType, next);
+        }}
+      />
 
       <EditMemberModal member={editingMember} passes={passes} onClose={() => setEditingMember(null)} onSaved={() => router.refresh()} />
 

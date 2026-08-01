@@ -5,7 +5,7 @@ import { User } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/format";
 import { initials } from "@/lib/utils";
-import { MemberLedger, type LedgerEntry } from "@/components/admin/member-ledger";
+import { MemberDetailTables, type LedgerRow } from "@/components/admin/member-ledger";
 import { BackButton } from "@/components/admin/back-button";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,21 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 function membershipNo(userId: string) {
   return `MBR-${userId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+}
+
+// Supabase returns `date` columns as bare "YYYY-MM-DD" but `timestamp`/
+// `timestamptz` columns as a full ISO string - normalize to the first 10
+// chars before parsing via explicit y/m/d components (not
+// `new Date("YYYY-MM-DD")`, which the spec parses as UTC midnight and a
+// negative-UTC-offset viewer could render a day early). Matches the
+// normalizeYMD pattern used elsewhere in this app for the same reason.
+function prettyYMD(dateStr: string) {
+  const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function dayKeyOf(dateStr: string) {
+  return dateStr.slice(0, 10);
 }
 
 type ProfileRow = {
@@ -43,12 +58,9 @@ type PaymentRow = {
   amount: number;
   payment_method: string | null;
   payment_date: string;
+  notes: string | null;
   subscription_id: string | null;
 };
-
-type CheckInRow = { id: string; checked_in_at: string };
-
-type EventRow = { id: string; event_type: string; description: string; created_at: string };
 
 export default async function MemberLedgerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,7 +73,7 @@ export default async function MemberLedgerPage({ params }: { params: Promise<{ i
     .maybeSingle<ProfileRow>();
   if (!profile) notFound();
 
-  const [subsRes, paymentsRes, checkInsRes, eventsRes] = await Promise.all([
+  const [subsRes, paymentsRes, checkInsCountRes] = await Promise.all([
     supabase
       .from("subscriptions")
       .select("id, pass_id, start_date, end_date, status, discount_amount, created_at, gym_passes:pass_id ( name, price, duration_days )")
@@ -70,69 +82,73 @@ export default async function MemberLedgerPage({ params }: { params: Promise<{ i
       .returns<SubRow[]>(),
     supabase
       .from("payments")
-      .select("id, amount, payment_method, payment_date, subscription_id")
+      .select("id, amount, payment_method, payment_date, notes, subscription_id")
       .eq("user_id", id)
       .order("payment_date", { ascending: true })
       .returns<PaymentRow[]>(),
-    supabase.from("check_ins").select("id, checked_in_at").eq("user_id", id).order("checked_in_at", { ascending: true }).returns<CheckInRow[]>(),
-    supabase
-      .from("member_events")
-      .select("id, event_type, description, created_at")
-      .eq("user_id", id)
-      .order("created_at", { ascending: true })
-      .returns<EventRow[]>(),
+    supabase.from("check_ins").select("id", { count: "exact", head: true }).eq("user_id", id),
   ]);
 
   const subscriptions = subsRes.data ?? [];
   const payments = paymentsRes.data ?? [];
-  const checkIns = checkInsRes.data ?? [];
-  const events = eventsRes.data ?? [];
+  const totalVisits = checkInsCountRes.count ?? 0;
 
+  // A real accounting-style ledger: every membership charge is a Debit
+  // (what they now owe), every discount and payment is a Credit (what
+  // reduces that), and Balance is the running amount still owed - one
+  // continuous account across the member's whole history, not reset per
+  // subscription. Sorted oldest-first, like a bank statement.
   const passNameBySub = new Map(subscriptions.map((s) => [s.id, s.gym_passes?.name ?? "Pass"]));
 
-  const joinedEntry: LedgerEntry = {
-    id: "joined",
-    date: profile.created_at,
-    category: "joined",
-    title: "Joined Vishal Fitness",
-  };
+  type UnsortedRow = { date: string; description: string; debit: number; credit: number };
+  const unsortedRows: UnsortedRow[] = [];
 
-  const entries: LedgerEntry[] = [
-    joinedEntry,
-    ...subscriptions.map((s, i): LedgerEntry => ({
-      id: `sub-${s.id}`,
+  subscriptions.forEach((s, i) => {
+    const fee = s.gym_passes?.price ?? 0;
+    const discount = s.discount_amount ?? 0;
+    const passName = s.gym_passes?.name ?? "Pass";
+    unsortedRows.push({
       date: s.created_at,
-      category: "membership",
-      title: `${i === 0 ? "Subscribed to" : "Renewed to"} ${s.gym_passes?.name ?? "a pass"}`,
-      subtitle: `${s.gym_passes?.duration_days ?? "-"} days · ${formatINR(s.gym_passes?.price ?? 0)}${
-        s.discount_amount ? ` · ${formatINR(s.discount_amount)} discount` : ""
-      }`,
-    })),
-    ...payments.map((p): LedgerEntry => ({
-      id: `pay-${p.id}`,
-      date: p.payment_date,
-      category: "payment",
-      title: `Paid ${formatINR(p.amount)}`,
-      subtitle: [p.payment_method?.toUpperCase(), p.subscription_id ? passNameBySub.get(p.subscription_id) : null]
-        .filter(Boolean)
-        .join(" · "),
-    })),
-    ...checkIns.map((c): LedgerEntry => ({
-      id: `visit-${c.id}`,
-      date: c.checked_in_at,
-      category: "visit",
-      title: "Checked in",
-    })),
-    ...events.map((e): LedgerEntry => ({
-      id: `event-${e.id}`,
-      date: e.created_at,
-      category: "change",
-      title: e.description,
-    })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      description: `${i === 0 ? "Subscribed to" : "Renewed to"} ${passName} (${prettyYMD(s.start_date)} → ${prettyYMD(s.end_date)})`,
+      debit: fee,
+      credit: 0,
+    });
+    if (discount > 0) {
+      unsortedRows.push({ date: s.created_at, description: `Discount applied - ${passName}`, debit: 0, credit: discount });
+    }
+  });
+
+  payments.forEach((p) => {
+    const passName = p.subscription_id ? passNameBySub.get(p.subscription_id) : null;
+    const method = (p.payment_method ?? "").toUpperCase();
+    const label = [`Payment received${method ? ` - ${method}` : ""}`, passName ? `(${passName})` : null, p.notes ? `- ${p.notes}` : null]
+      .filter(Boolean)
+      .join(" ");
+    unsortedRows.push({ date: p.payment_date, description: label, debit: 0, credit: p.amount ?? 0 });
+  });
+
+  // Compare by calendar day first, not the raw string - subscriptions.created_at
+  // is a full timestamp while payments.payment_date is date-only, and comparing
+  // those as plain strings would sort the shorter date-only string before a
+  // same-day timestamp regardless of real order. On a genuine same-day tie,
+  // show the charge before the payment that settles it (the natural reading
+  // order), rather than an arbitrary string-comparison artifact.
+  unsortedRows.sort((a, b) => {
+    const dayCompare = dayKeyOf(a.date).localeCompare(dayKeyOf(b.date));
+    if (dayCompare !== 0) return dayCompare;
+    const aIsCharge = a.debit > 0 ? 0 : 1;
+    const bIsCharge = b.debit > 0 ? 0 : 1;
+    if (aIsCharge !== bIsCharge) return aIsCharge - bIsCharge;
+    return a.date.localeCompare(b.date);
+  });
+
+  let runningBalance = 0;
+  const ledgerRows: LedgerRow[] = unsortedRows.map((r, i) => {
+    runningBalance += r.debit - r.credit;
+    return { id: `row-${i}`, date: r.date, description: r.description, debit: r.debit, credit: r.credit, balance: runningBalance };
+  });
 
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const totalVisits = checkIns.length;
   const latestSub = [...subscriptions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
   const currentStatus = latestSub ? latestSub.status.charAt(0).toUpperCase() + latestSub.status.slice(1) : "No subscription";
 
@@ -165,13 +181,13 @@ export default async function MemberLedgerPage({ params }: { params: Promise<{ i
         <StatTile label="Status" value={currentStatus} />
       </div>
 
-      {subscriptions.length === 0 && payments.length === 0 && checkIns.length === 0 && events.length === 0 ? (
+      {ledgerRows.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[20px] border border-border bg-card px-6 py-16 text-center">
           <User className="size-9 text-muted-foreground" />
           <p className="text-[13px] text-muted-foreground">No activity recorded for this member yet.</p>
         </div>
       ) : (
-        <MemberLedger entries={entries} />
+        <MemberDetailTables rows={ledgerRows} openingDate={profile.created_at} />
       )}
     </div>
   );

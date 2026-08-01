@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/admin/modal";
 
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -66,8 +66,10 @@ export function MonthPicker({
         <button
           type="button"
           onClick={openPicker}
-          className="min-w-[86px] rounded-md px-1 text-center text-[11px] font-bold text-white/85 transition-colors hover:bg-white/10"
+          aria-label={`Change month, currently ${monthLabel(month)}`}
+          className="flex items-center gap-1.5 rounded-md border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-white/85 transition-colors hover:border-white/30 hover:bg-white/15"
         >
+          <CalendarDays className="size-3.5 text-white/60" />
           {monthLabel(month)}
         </button>
 

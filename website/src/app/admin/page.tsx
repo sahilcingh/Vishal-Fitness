@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { UserPlus, TrendingUp, TrendingDown, Bell, ArrowRight } from "lucide-react";
+import { UserPlus, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { nowInIST, istMidnightMs } from "@/lib/ist-time";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
@@ -226,17 +226,6 @@ export default async function OverviewPage({
         </div>
         <RevenueChart days={chartDays} today={todayYMD} />
       </div>
-
-      <div className="mb-5 rounded-[20px] border border-border bg-card p-5 shadow-sm">
-        <h3 className="mb-3.5 flex items-center gap-2 font-display text-[17px] font-bold">
-          <Bell className="size-4 text-energy" /> Expiry Alerts
-        </h3>
-        <div className="flex gap-2.5">
-          <AlertChip count={expired} label="Expired" tone="danger" />
-          <AlertChip count={critical} label="≤ 7 Days" tone="critical" />
-          <AlertChip count={expiring} label="≤ 30 Days" tone="warn" />
-        </div>
-      </div>
     </div>
   );
 }
@@ -264,21 +253,4 @@ function StatCard({ label, value, sub, href }: { label: string; value: number; s
   }
 
   return <div className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">{content}</div>;
-}
-
-const TONE_CLASSES = {
-  danger: "bg-danger/10 text-danger",
-  critical: "bg-energy/12 text-energy",
-  warn: "bg-sun/[0.18] text-[#B8930A]",
-} as const;
-
-function AlertChip({ count, label, tone }: { count: number; label: string; tone: keyof typeof TONE_CLASSES }) {
-  return (
-    <div className={`flex-1 rounded-xl px-3.5 py-3 ${TONE_CLASSES[tone]}`}>
-      <div className="num font-display text-[21px] font-bold">
-        <CountUp value={count} />
-      </div>
-      <div className="text-[10px] font-bold uppercase tracking-wide">{label}</div>
-    </div>
-  );
 }
