@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Search,
   ChevronDown,
@@ -14,6 +15,7 @@ import {
   CreditCard,
   Loader2,
   AlertTriangle,
+  History,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
@@ -22,6 +24,7 @@ import { Modal } from "@/components/admin/modal";
 import { EditMemberModal, type EditableMember } from "@/components/admin/edit-member-modal";
 import { PaymentsModal } from "@/components/admin/payments-modal";
 import { Pagination, paginate } from "@/components/admin/pagination";
+import { logMemberEvent } from "@/lib/member-events";
 
 const PAGE_SIZE = 10;
 
@@ -115,7 +118,7 @@ export function SubscriptionsList({
     setExpanded(next);
   }
 
-  async function updateStatus(id: string, status: string) {
+  async function updateStatus(id: string, userId: string, status: string) {
     // Suspending or cancelling is destructive (cuts the member's access) and
     // fires immediately from the menu - confirm before mutating.
     if (status === "suspended" && !window.confirm("Suspend this subscription? The member will lose access until it's reactivated.")) {
@@ -130,6 +133,13 @@ export function SubscriptionsList({
       setErrorMessage(`Could not update the status: ${error.message}`);
       return;
     }
+    const STATUS_LABEL: Record<string, string> = { active: "Marked active", suspended: "Suspended", cancelled: "Cancelled" };
+    await logMemberEvent(supabase, {
+      userId,
+      subscriptionId: id,
+      eventType: "status_change",
+      description: STATUS_LABEL[status] ?? `Status changed to ${status}`,
+    });
     router.refresh();
   }
 
@@ -372,14 +382,23 @@ export function SubscriptionsList({
                     </div>
 
                     <div className="mt-3.5 flex items-center justify-between">
-                      <button
-                        onClick={() => setEditingMember({ id: sub.user_id, full_name: profile?.full_name ?? null, phone: profile?.phone ?? null })}
-                        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold"
-                      >
-                        <Pencil className="size-3.5" />
-                        Edit Member
-                      </button>
-                      <StatusMenu id={sub.id} onChange={updateStatus} />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditingMember({ id: sub.user_id, full_name: profile?.full_name ?? null, phone: profile?.phone ?? null })}
+                          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold"
+                        >
+                          <Pencil className="size-3.5" />
+                          Edit Member
+                        </button>
+                        <Link
+                          href={`/admin/members/${sub.user_id}`}
+                          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold"
+                        >
+                          <History className="size-3.5" />
+                          Ledger
+                        </Link>
+                      </div>
+                      <StatusMenu id={sub.id} onChange={(id, status) => updateStatus(id, sub.user_id, status)} />
                     </div>
                   </div>
                 )}
@@ -577,6 +596,12 @@ function DiscountModal({ sub, onClose, onSaved }: { sub: SubscriptionRow; onClos
       setError("Could not save the discount. Please try again.");
       return;
     }
+    await logMemberEvent(supabase, {
+      userId: sub.user_id,
+      subscriptionId: sub.id,
+      eventType: "discount_change",
+      description: safeAmount > 0 ? `Discount set to ${formatINR(safeAmount)}` : "Discount removed",
+    });
     onSaved();
   }
 

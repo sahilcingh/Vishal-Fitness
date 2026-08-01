@@ -75,7 +75,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className={`max-h-[90vh] w-full ${maxWidthClass} overflow-y-auto rounded-[20px] border border-border bg-card p-6 shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
+        className={`max-h-[90vh] w-full ${maxWidthClass} overflow-y-auto rounded-[20px] border border-border bg-card p-6 text-foreground shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

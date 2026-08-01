@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Lets the dev server accept requests proxied through a Cloudflare quick
+  // tunnel (random *.trycloudflare.com subdomain each run) for local demos.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   images: {
     // Member photos are served from Supabase Storage's public bucket URLs,
     // whose hostname depends on the project ref (env-configured, not a

@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Modal } from "@/components/admin/modal";
+import { logMemberEvent } from "@/lib/member-events";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
 export type EditableMember = {
@@ -64,9 +65,13 @@ export function EditMemberModal({
 }) {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
+  const [originalName, setOriginalName] = useState("");
   const [phone, setPhone] = useState("");
+  const [originalPhone, setOriginalPhone] = useState("");
   const [gender, setGender] = useState("");
+  const [originalGender, setOriginalGender] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
+  const [originalTimeSlot, setOriginalTimeSlot] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [email, setEmail] = useState("");
   const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
@@ -118,9 +123,13 @@ export function EditMemberModal({
       if (cancelled) return;
 
       setName(profile?.full_name ?? "");
+      setOriginalName(profile?.full_name ?? "");
       setPhone(profile?.phone ?? "");
+      setOriginalPhone(profile?.phone ?? "");
       setGender(profile?.gender ?? "");
+      setOriginalGender(profile?.gender ?? "");
       setTimeSlot(profile?.time_slot ?? "");
+      setOriginalTimeSlot(profile?.time_slot ?? "");
       setExistingPhotoUrl(profile?.photo_url ?? null);
 
       // Fetch fresh - prefer the active subscription, else the most recent one.
@@ -257,12 +266,42 @@ export function EditMemberModal({
       const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", member!.id);
       if (profileErr) throw profileErr;
 
+      const changedFields: string[] = [];
+      if (name.trim() !== originalName.trim()) changedFields.push("name");
+      if (phone.trim() !== originalPhone.trim()) changedFields.push("phone");
+      if ((gender || null) !== (originalGender || null)) changedFields.push("gender");
+      if ((timeSlot.trim() || null) !== (originalTimeSlot.trim() || null)) changedFields.push("time slot");
+      if (photoUrl) changedFields.push("photo");
+      if (changedFields.length > 0) {
+        await logMemberEvent(supabase, {
+          userId: member!.id,
+          eventType: "profile_edit",
+          description: `Updated ${changedFields.join(", ")}`,
+        });
+      }
+
       if (passId && subscriptionId) {
         const { error: subErr } = await supabase
           .from("subscriptions")
           .update({ pass_id: passId, start_date: startDate, end_date: endDate })
           .eq("id", subscriptionId);
         if (subErr) throw subErr;
+
+        if (!unchanged) {
+          const subChanges: string[] = [];
+          if (passId !== originalPassId) {
+            const newPassName = passes.find((p) => p.id === passId)?.name;
+            subChanges.push(newPassName ? `pass changed to ${newPassName}` : "pass changed");
+          }
+          if (startDate !== originalStartDate) subChanges.push(`start date changed to ${prettyDate(startDate)}`);
+          if (isValidYMD(endDate) && endDate !== storedEndDate) subChanges.push(`end date changed to ${prettyDate(endDate)}`);
+          await logMemberEvent(supabase, {
+            userId: member!.id,
+            subscriptionId,
+            eventType: "subscription_edit",
+            description: subChanges.length > 0 ? subChanges.join("; ") : "Subscription updated",
+          });
+        }
       }
 
       const trimmedEmail = email.trim();

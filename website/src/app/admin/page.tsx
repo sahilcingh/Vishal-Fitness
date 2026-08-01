@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { UserPlus, TrendingUp, TrendingDown, Bell } from "lucide-react";
+import { UserPlus, TrendingUp, TrendingDown, Bell, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { nowInIST, istMidnightMs } from "@/lib/ist-time";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
+import { MonthPicker } from "@/components/admin/month-picker";
 import { RefreshButton } from "@/components/admin/refresh-button";
 import { QuickRenewButton } from "@/components/admin/quick-renew-button";
 import { CountUp } from "@/components/count-up";
@@ -38,77 +39,85 @@ function dayKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// classes.start_time is stored as a naive local (IST) string with no
-// timezone suffix (matches the Flutter app's own storage format) - compare
-// against the same naive shape rather than a real UTC instant.
-function naiveISO(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+function monthKeyOf(year: number, month0: number) {
+  return `${year}-${String(month0 + 1).padStart(2, "0")}`;
 }
 
-export default async function OverviewPage() {
+function isValidMonthKey(s: string | undefined): s is string {
+  return !!s && /^\d{4}-\d{2}$/.test(s);
+}
+
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month: monthParam } = await searchParams;
   const supabase = await createClient();
 
   const nowReal = new Date();
   const now = nowInIST();
-  const monthStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), 1));
-  const lastMonthStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth() - 1, 1));
+  const currentMonthKey = monthKeyOf(now.getFullYear(), now.getMonth());
+  // Can't select a future month - clamp anything past the current one back
+  // to "now" instead of silently querying an empty range.
+  const monthKey = isValidMonthKey(monthParam) && monthParam <= currentMonthKey ? monthParam : currentMonthKey;
+  const [selYear, selMonth1] = monthKey.split("-").map(Number);
+  const selMonth0 = selMonth1 - 1;
+  const isSelectedCurrentMonth = monthKey === currentMonthKey;
+
+  const monthFirstDay = new Date(selYear, selMonth0, 1);
+  const monthLastDay = new Date(selYear, selMonth0 + 1, 0);
+  // The current month can't show revenue for days that haven't happened yet.
+  const lastVisibleDay = isSelectedCurrentMonth ? now : monthLastDay;
+  const monthStartYMD = dayKey(monthFirstDay);
+  const monthEndYMD = dayKey(monthLastDay);
+
+  const prevMonthFirstDay = new Date(selYear, selMonth0 - 1, 1);
+  const prevMonthLastDay = new Date(selYear, selMonth0, 0);
+  const prevMonthStartYMD = dayKey(prevMonthFirstDay);
+  const prevMonthEndYMD = dayKey(prevMonthLastDay);
+
   const todayStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), now.getDate()));
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
 
   const [
-    activeSubs,
-    paymentsThisMonth,
-    paymentsLastMonth,
+    totalMembersRes,
+    paymentsSelectedMonth,
+    paymentsPrevMonth,
     newToday,
-    upcomingClassesRows,
     allActiveSubEndDates,
-    paymentsLast14Days,
     passes,
   ] = await Promise.all([
-    safeSelect<{ id: string }>(supabase.from("subscriptions").select("id").eq("status", "active")),
-    safeSelect<{ amount: number }>(
-      supabase.from("payments").select("amount").gte("created_at", monthStart.toISOString()),
+    supabase.from("subscriptions").select("id", { count: "exact", head: true }),
+    safeSelect<{ amount: number; payment_date: string }>(
+      supabase.from("payments").select("amount, payment_date").gte("payment_date", monthStartYMD).lte("payment_date", monthEndYMD),
     ),
     safeSelect<{ amount: number }>(
-      supabase
-        .from("payments")
-        .select("amount")
-        .gte("created_at", lastMonthStart.toISOString())
-        .lt("created_at", monthStart.toISOString()),
+      supabase.from("payments").select("amount").gte("payment_date", prevMonthStartYMD).lte("payment_date", prevMonthEndYMD),
     ),
     safeSelect<{ id: string }>(
       supabase.from("subscriptions").select("id").gte("created_at", todayStart.toISOString()),
     ),
-    safeSelect<{ id: string }>(supabase.from("classes").select("id").gt("start_time", naiveISO(now))),
     safeSelect<{ end_date: string }>(
       supabase.from("subscriptions").select("end_date").neq("status", "cancelled"),
-    ),
-    safeSelect<{ amount: number; payment_date: string }>(
-      supabase
-        .from("payments")
-        .select("amount, payment_date")
-        .gte("payment_date", dayKey(fourteenDaysAgo)),
     ),
     safeSelect<Pass>(
       supabase.from("gym_passes").select("id, name, price, duration_days").eq("is_active", true).order("duration_days", { ascending: true }),
     ),
   ]);
 
-  const activeMembers = activeSubs.length;
-  const revenueThisMonth = paymentsThisMonth.reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const revenueLastMonth = paymentsLastMonth.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+  if (totalMembersRes.error) console.error("admin/page: total members count failed:", totalMembersRes.error);
+  const totalMembers = totalMembersRes.count ?? 0;
+  const monthRevenue = paymentsSelectedMonth.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+  const prevMonthRevenue = paymentsPrevMonth.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const newMembersToday = newToday.length;
-  const upcomingClasses = upcomingClassesRows.length;
 
   let trendLabel = "";
   let trendPositive = true;
-  if (revenueLastMonth > 0) {
-    const pct = Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100);
+  if (prevMonthRevenue > 0) {
+    const pct = Math.round(((monthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100);
     trendPositive = pct >= 0;
     trendLabel = `${trendPositive ? "+" : ""}${pct}% vs last month`;
-  } else if (revenueThisMonth > 0) {
+  } else if (monthRevenue > 0) {
     trendLabel = "New this month";
   }
 
@@ -123,21 +132,18 @@ export default async function OverviewPage() {
     else if (days <= 7) critical++;
     else if (days <= 30) expiring++;
   }
+  const expiringSoon = critical + expiring;
 
   const revenueByDay = new Map<string, number>();
-  for (const p of paymentsLast14Days) {
+  for (const p of paymentsSelectedMonth) {
     revenueByDay.set(p.payment_date, (revenueByDay.get(p.payment_date) ?? 0) + (p.amount ?? 0));
   }
-  const chartDays: RevenueDay[] = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(fourteenDaysAgo);
-    d.setDate(d.getDate() + i);
-    const key = dayKey(d);
-    return {
-      date: key,
-      label: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).toUpperCase(),
-      amount: revenueByDay.get(key) ?? 0,
-    };
-  });
+  const chartDays: RevenueDay[] = [];
+  for (const cursor = new Date(monthFirstDay); cursor <= lastVisibleDay; cursor.setDate(cursor.getDate() + 1)) {
+    const key = dayKey(cursor);
+    chartDays.push({ date: key, label: String(cursor.getDate()), amount: revenueByDay.get(key) ?? 0 });
+  }
+  const todayYMD = dayKey(now);
 
   return (
     <div>
@@ -160,13 +166,11 @@ export default async function OverviewPage() {
 
       <div className="mb-5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="rounded-[20px] border border-border bg-[linear-gradient(135deg,#141414,#242424)] p-5 text-white shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">
-              Revenue this month
-            </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">Revenue</span>
             {trendLabel && (
               <span
-                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
                   trendPositive ? "bg-brand/20 text-[#4FE393]" : "bg-energy/20 text-energy"
                 }`}
               >
@@ -175,27 +179,52 @@ export default async function OverviewPage() {
               </span>
             )}
           </div>
-          <div className="num mt-3.5 font-display text-[38px] font-bold">
-            <CountUp value={revenueThisMonth} format="inr" />
+          <div className="mt-1.5">
+            <MonthPicker month={monthKey} currentMonth={currentMonthKey} basePath="/admin" />
           </div>
-          <Link href="/admin/daily-revenue" className="mt-1 inline-block text-[12px] font-bold text-[#4FE393]">
+          <div className="num mt-2.5 font-display text-[38px] font-bold">
+            <CountUp value={monthRevenue} format="inr" />
+          </div>
+          <Link
+            href={`/admin/daily-revenue?from=${monthStartYMD}&to=${dayKey(lastVisibleDay)}`}
+            className="mt-1 inline-block text-[12px] font-bold text-[#4FE393]"
+          >
             Day-wise breakdown →
           </Link>
         </div>
 
-        <StatCard label="Active Members" value={activeMembers} sub={`+${newMembersToday} today`} />
-        <StatCard label="New Today" value={newMembersToday} sub="Since midnight" />
-        <StatCard label="Upcoming Classes" value={upcomingClasses} sub="Next 7 days" />
+        <StatCard
+          label="Total Members"
+          value={totalMembers}
+          sub={`+${newMembersToday} today`}
+          href="/admin/subscriptions"
+        />
+        <StatCard
+          label="Expired"
+          value={expired}
+          sub="Needs renewal"
+          href="/admin/expiry?filter=expired"
+        />
+        <StatCard
+          label="Expiring Soon"
+          value={expiringSoon}
+          sub="Within 30 days"
+          href="/admin/expiry?filter=soon"
+        />
       </div>
 
       <div className="mb-4 rounded-[20px] border border-border bg-card p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="font-display text-[18px] font-bold">14-Day Revenue</h3>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-display text-[18px] font-bold">
+            {monthKeyOf(selYear, selMonth0) === currentMonthKey
+              ? "Revenue Trend"
+              : `Revenue Trend — ${monthFirstDay.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`}
+          </h3>
           <span className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
             <span className="size-2 rounded-sm bg-brand" /> Daily collections (₹)
           </span>
         </div>
-        <RevenueChart days={chartDays} />
+        <RevenueChart days={chartDays} today={todayYMD} />
       </div>
 
       <div className="mb-5 rounded-[20px] border border-border bg-card p-5 shadow-sm">
@@ -212,16 +241,29 @@ export default async function OverviewPage() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: number; sub: string }) {
-  return (
-    <div className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+function StatCard({ label, value, sub, href }: { label: string; value: number; sub: string; href?: string }) {
+  const content = (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
+        {href && <ArrowRight className="size-3.5 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-brand" />}
+      </div>
       <div className="num mt-3.5 font-display text-[26px] font-bold">
         <CountUp value={value} />
       </div>
       <div className="mt-1.5 text-[12px] font-semibold text-muted-foreground">{sub}</div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="card-hover group block rounded-[20px] border border-border bg-card p-5 shadow-sm">
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="card-hover rounded-[20px] border border-border bg-card p-5 shadow-sm">{content}</div>;
 }
 
 const TONE_CLASSES = {

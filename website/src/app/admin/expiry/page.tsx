@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { nowInIST } from "@/lib/ist-time";
-import { ExpiryTable, type ExpiryRow } from "@/components/admin/expiry-table";
+import { ExpiryTable, type ExpiryRow, type ExpiryFilter } from "@/components/admin/expiry-table";
 import { ExpiryExportButton } from "@/components/admin/expiry-export-button";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +67,15 @@ function daysLeft(endYMD: string, todayYMD: string) {
   return Math.round((parseYMD(endYMD).getTime() - parseYMD(todayYMD).getTime()) / 86_400_000);
 }
 
-export default async function ExpiryPage() {
+const VALID_FILTERS: ExpiryFilter[] = ["all", "expired", "critical", "expiring", "healthy", "soon"];
+
+export default async function ExpiryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter: filterParam } = await searchParams;
+  const initialFilter = VALID_FILTERS.includes(filterParam as ExpiryFilter) ? (filterParam as ExpiryFilter) : "all";
   const supabase = await createClient();
   // Server may run in a different timezone than the gym (Vercel defaults to
   // UTC) - see src/lib/ist-time.ts. toYMD() only reads local calendar
@@ -135,7 +143,7 @@ export default async function ExpiryPage() {
         <ExpiryExportButton rows={rows} />
       </div>
 
-      <ExpiryTable rows={rows} passes={passes} />
+      <ExpiryTable rows={rows} passes={passes} initialFilter={initialFilter} />
     </div>
   );
 }

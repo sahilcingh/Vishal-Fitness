@@ -29,10 +29,15 @@ export type ExpiryRow = {
 };
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
-type Filter = "all" | ExpiryCategory;
+// "soon" is a synthetic bucket (critical + expiring) for the Overview page's
+// "Expiring Soon" card deep link - it has no chip of its own, it just narrows
+// the initial view; the existing per-category chips still work normally.
+export type ExpiryFilter = "all" | ExpiryCategory | "soon";
+type Filter = ExpiryFilter;
 
-// Mirrors the _Filter enum order in admin_expiry_screen.dart.
-const FILTERS: { key: Filter; label: string }[] = [
+// Mirrors the _Filter enum order in admin_expiry_screen.dart. "soon" has no
+// chip (see note above), so this list is intentionally narrower than Filter.
+const FILTERS: { key: "all" | ExpiryCategory; label: string }[] = [
   { key: "all", label: "All" },
   { key: "expired", label: "Expired" },
   { key: "critical", label: "Critical" },
@@ -83,9 +88,17 @@ const AVATAR_COLORS = [
   "border-sun/30 bg-sun/15 text-sun-onlight dark:text-sun",
 ];
 
-export function ExpiryTable({ rows, passes }: { rows: ExpiryRow[]; passes: Pass[] }) {
+export function ExpiryTable({
+  rows,
+  passes,
+  initialFilter = "all",
+}: {
+  rows: ExpiryRow[];
+  passes: Pass[];
+  initialFilter?: Filter;
+}) {
   const router = useRouter();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<ExpiryRow | null>(null);
@@ -99,7 +112,9 @@ export function ExpiryTable({ rows, passes }: { rows: ExpiryRow[]; passes: Pass[
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (filter !== "all" && r.category !== filter) return false;
+      if (filter === "soon" ? r.category !== "critical" && r.category !== "expiring" : filter !== "all" && r.category !== filter) {
+        return false;
+      }
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.phone.toLowerCase().includes(q);
     });
@@ -120,6 +135,15 @@ export function ExpiryTable({ rows, passes }: { rows: ExpiryRow[]; passes: Pass[
         <SummaryTile count={counts.expiring} label="≤ 30 Days" tone="sun" />
         <SummaryTile count={counts.healthy} label="Active" tone="brand" />
       </div>
+
+      {filter === "soon" && (
+        <div className="mb-3 flex items-center gap-2 text-[12.5px] font-semibold text-muted-foreground">
+          Showing members expiring within 30 days.
+          <button type="button" onClick={() => setFilter("all")} className="font-bold text-brand">
+            Clear filter
+          </button>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
