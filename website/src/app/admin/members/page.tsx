@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { MembersDirectory, type MemberRow } from "@/components/admin/members-directory";
+import { MembersExportButton } from "@/components/admin/members-export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,13 +44,16 @@ export default async function MembersLedgerPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-display text-[26px] font-bold leading-none">
-          Trial Balance <span className="text-muted-foreground">/ Ledger</span>
-        </h1>
-        <p className="mt-1.5 text-[13px] text-muted-foreground">
-          Search any member to see their full history - membership, payments, visits, and changes.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-[26px] font-bold leading-none">
+            Trial Balance <span className="text-muted-foreground">/ Ledger</span>
+          </h1>
+          <p className="mt-1.5 text-[13px] text-muted-foreground">
+            Search any member to see their full history - membership, payments, visits, and changes.
+          </p>
+        </div>
+        <MembersExportButton members={members} />
       </div>
       <MembersDirectory members={members} />
     </div>

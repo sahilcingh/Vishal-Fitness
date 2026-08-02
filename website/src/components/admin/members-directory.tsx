@@ -44,21 +44,33 @@ function membershipNo(userId: string) {
   return `MBR-${userId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
 
+type BalanceFilter = "all" | "debit" | "credit";
+const BALANCE_FILTERS: { key: BalanceFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "debit", label: "Debit" },
+  { key: "credit", label: "Credit" },
+];
+
 export function MembersDirectory({ members }: { members: MemberRow[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Search + page live in the URL (not just component state) so that
-  // navigating into a member's ledger and clicking Back returns to the same
-  // filtered page instead of resetting to page 1 - React state doesn't
+  // Search + filter + page live in the URL (not just component state) so
+  // that navigating into a member's ledger and clicking Back returns to the
+  // same filtered page instead of resetting to page 1 - React state doesn't
   // survive this component unmounting for the detail route and remounting.
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
+  const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>(() => {
+    const f = searchParams.get("balance");
+    return f === "debit" || f === "credit" ? f : "all";
+  });
   const [page, setPage] = useState(() => Number(searchParams.get("page")) || 1);
 
-  function syncUrl(nextSearch: string, nextPage: number) {
+  function syncUrl(nextSearch: string, nextFilter: BalanceFilter, nextPage: number) {
     const params = new URLSearchParams();
     if (nextSearch) params.set("search", nextSearch);
+    if (nextFilter !== "all") params.set("balance", nextFilter);
     if (nextPage > 1) params.set("page", String(nextPage));
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -67,15 +79,21 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
   function handleSearchChange(value: string) {
     setSearch(value);
     setPage(1);
-    syncUrl(value, 1);
+    syncUrl(value, balanceFilter, 1);
+  }
+
+  function handleFilterChange(next: BalanceFilter) {
+    setBalanceFilter(next);
+    setPage(1);
+    syncUrl(search, next, 1);
   }
 
   function handlePageChange(nextPage: number) {
     setPage(nextPage);
-    syncUrl(search, nextPage);
+    syncUrl(search, balanceFilter, nextPage);
   }
 
-  const filtered = useMemo(() => {
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return members;
     return members.filter((m) => {
@@ -85,12 +103,26 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
     });
   }, [members, search]);
 
+  const balanceCounts = useMemo(
+    () => ({
+      debit: members.filter((m) => m.balance > 0).length,
+      credit: members.filter((m) => m.balance < 0).length,
+    }),
+    [members],
+  );
+
+  const filtered = useMemo(() => {
+    if (balanceFilter === "debit") return searched.filter((m) => m.balance > 0);
+    if (balanceFilter === "credit") return searched.filter((m) => m.balance < 0);
+    return searched;
+  }, [searched, balanceFilter]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = useMemo(() => paginate(filtered, page, PAGE_SIZE), [filtered, page]);
 
   return (
     <div>
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           value={search}
@@ -100,9 +132,37 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
         />
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {BALANCE_FILTERS.map((f) => {
+          const isActive = balanceFilter === f.key;
+          const count = f.key === "all" ? members.length : balanceCounts[f.key];
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => handleFilterChange(f.key)}
+              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-semibold transition-colors ${
+                isActive ? "border-brand bg-brand text-white" : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              {f.label}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${isActive ? "bg-black/15" : "bg-muted-foreground/12"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {filtered.length === 0 ? (
         <p className="py-16 text-center text-[13px] text-muted-foreground">
-          {search ? `No members match "${search}".` : "No members yet."}
+          {search && balanceFilter !== "all"
+            ? `No ${balanceFilter} members match "${search}".`
+            : search
+              ? `No members match "${search}".`
+              : balanceFilter !== "all"
+                ? `No members with a ${balanceFilter} balance.`
+                : "No members yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
