@@ -37,10 +37,19 @@ function BalanceTag({ amount, bold = false }: { amount: number; bold?: boolean }
   return <span className={`text-aqua ${bold ? "font-bold" : ""}`}>{formatINR(-amount)} Cr</span>;
 }
 
+// `openingDate` is the account's login-creation date, but a subscription's
+// (backdated) entry date can land earlier than that - the Opening row is
+// always rendered first, so its own date must never be later than the
+// earliest real row or the table reads out of chronological order.
+function dayKeyOf(dateStr: string) {
+  return dateStr.slice(0, 10);
+}
+
 export function MemberDetailTables({ rows, openingDate }: { rows: LedgerRow[]; openingDate: string }) {
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageItems = useMemo(() => paginate(rows, page, PAGE_SIZE), [rows, page]);
+  const effectiveOpeningDate = rows.length > 0 && dayKeyOf(rows[0].date) < dayKeyOf(openingDate) ? rows[0].date : openingDate;
 
   const totalDebit = useMemo(() => rows.reduce((sum, r) => sum + r.debit, 0), [rows]);
   const totalCredit = useMemo(() => rows.reduce((sum, r) => sum + r.credit, 0), [rows]);
@@ -68,7 +77,7 @@ export function MemberDetailTables({ rows, openingDate }: { rows: LedgerRow[]; o
             </thead>
             <tbody className="divide-y divide-border">
               <tr className="bg-muted/30 text-muted-foreground">
-                <td className="px-5 py-2.5">{formatDate(openingDate)}</td>
+                <td className="px-5 py-2.5">{formatDate(effectiveOpeningDate)}</td>
                 <td className="px-3 py-2.5 italic">Opening</td>
                 <td className="px-3 py-2.5 text-right">-</td>
                 <td className="px-3 py-2.5 text-right">-</td>
