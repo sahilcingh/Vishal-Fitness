@@ -36,6 +36,7 @@ type MemberSubscription = {
   status: string;
   created_at: string;
   entry_date: string;
+  pass_price: number | null;
   discount_amount: number | null;
   pass_id: string | null;
   gym_passes: { name: string | null; price: number | null; duration_days: number | null } | null;
@@ -359,7 +360,7 @@ export function AddMemberForm({
     const supabase = createClient();
     const { data } = await supabase
       .from("subscriptions")
-      .select("id, start_date, end_date, status, created_at, entry_date, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
+      .select("id, start_date, end_date, status, created_at, entry_date, pass_price, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
       .eq("user_id", userId)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
@@ -377,7 +378,7 @@ export function AddMemberForm({
     const [{ data: subs }, { data: pays }] = await Promise.all([
       supabase
         .from("subscriptions")
-        .select("id, start_date, end_date, status, created_at, entry_date, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
+        .select("id, start_date, end_date, status, created_at, entry_date, pass_price, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
         .eq("user_id", userId)
         .order("created_at", { ascending: true })
         .returns<MemberSubscription[]>(),
@@ -571,10 +572,11 @@ export function AddMemberForm({
         .limit(1)
         .single();
 
-      // entry_date always needs setting (create-member doesn't know about it
-      // yet, so it isn't in the initial insert) - always included, unlike
-      // discount/end_date which only patch when the admin actually set them.
-      const subPatch: Record<string, unknown> = { entry_date: entryDate };
+      // entry_date/pass_price always need setting (create-member doesn't
+      // know about either yet, so neither is in the initial insert) - always
+      // included, unlike discount/end_date which only patch when the admin
+      // actually set them.
+      const subPatch: Record<string, unknown> = { entry_date: entryDate, pass_price: selectedPass!.price };
       if (discountAmount > 0) subPatch.discount_amount = discountAmount;
       if (extraDaysNum > 0) subPatch.end_date = endDate;
       let patchFailed = false;
@@ -714,6 +716,7 @@ export function AddMemberForm({
           end_date: endDate,
           status: "active",
           discount_amount: discountAmount > 0 ? discountAmount : 0,
+          pass_price: selectedPass!.price,
         })
         .select("id")
         .single();

@@ -36,6 +36,7 @@ export type SubscriptionRow = {
   user_id: string;
   discount_amount: number | null;
   pass_id: string | null;
+  pass_price: number | null;
   profiles: { full_name: string | null; phone: string | null; photo_url: string | null; time_slot: string | null } | null;
   gym_passes: { name: string | null; duration_days: number | null; price: number | null } | null;
   paid: number;
@@ -253,7 +254,7 @@ export function SubscriptionsList({
             const endDate = new Date(sub.end_date);
             const daysLeft = Math.floor((endDate.getTime() - nowMs) / 86_400_000);
             const isExpired = daysLeft < 0 || sub.status === "expired";
-            const totalFee = pass?.price ?? 0;
+            const totalFee = sub.pass_price ?? 0;
             const discountAmount = sub.discount_amount ?? 0;
             const effectivePrice = Math.max(totalFee - discountAmount, 0);
             const balance = effectivePrice - sub.paid;
@@ -471,7 +472,7 @@ export function SubscriptionsList({
         userId={paymentsFor?.user_id ?? ""}
         memberName={paymentsFor?.profiles?.full_name ?? "Member"}
         passName={paymentsFor?.gym_passes?.name ?? "Pass"}
-        passPrice={paymentsFor?.gym_passes?.price ?? 0}
+        passPrice={paymentsFor?.pass_price ?? 0}
         discountAmount={paymentsFor?.discount_amount ?? 0}
       />
 
@@ -620,7 +621,7 @@ function StatusMenu({ id, onChange }: { id: string; onChange: (id: string, statu
 }
 
 function DiscountModal({ sub, onClose, onSaved }: { sub: SubscriptionRow; onClose: () => void; onSaved: () => void }) {
-  const passPrice = sub.gym_passes?.price ?? 0;
+  const passPrice = sub.pass_price ?? 0;
   const [isPercent, setIsPercent] = useState(false);
   const [value, setValue] = useState(sub.discount_amount ? sub.discount_amount.toFixed(0) : "");
   const [error, setError] = useState<string | null>(null);

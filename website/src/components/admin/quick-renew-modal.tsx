@@ -244,6 +244,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
           end_date: endDate,
           status: "active",
           discount_amount: discountAmount > 0 ? discountAmount : 0,
+          pass_price: selectedPass.price,
         })
         .select("id")
         .single();

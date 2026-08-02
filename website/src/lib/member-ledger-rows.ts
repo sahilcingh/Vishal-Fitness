@@ -5,8 +5,9 @@ export type LedgerSubscription = {
   start_date: string;
   end_date: string;
   entry_date: string;
+  pass_price: number | null;
   discount_amount: number | null;
-  gym_passes: { name: string | null; price: number | null } | null;
+  gym_passes: { name: string | null } | null;
 };
 
 export type LedgerPayment = {
@@ -43,7 +44,7 @@ export function buildLedgerRows(subscriptions: LedgerSubscription[], payments: L
   const unsortedRows: UnsortedRow[] = [];
 
   subscriptions.forEach((s, i) => {
-    const fee = s.gym_passes?.price ?? 0;
+    const fee = s.pass_price ?? 0;
     const discount = s.discount_amount ?? 0;
     const passName = s.gym_passes?.name ?? "Pass";
     unsortedRows.push({

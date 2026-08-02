@@ -36,8 +36,9 @@ type SubRow = {
   user_id: string | null;
   start_date: string | null;
   end_date: string | null;
+  pass_price: number | null;
   profiles: { full_name: string | null; phone: string | null } | null;
-  gym_passes: { name: string | null; price: number | null } | null;
+  gym_passes: { name: string | null } | null;
 };
 
 function toYMD(d: Date) {
@@ -87,9 +88,9 @@ export default async function ExpiryPage({
       supabase
         .from("subscriptions")
         .select(
-          `id, user_id, start_date, end_date,
+          `id, user_id, start_date, end_date, pass_price,
            profiles:user_id ( full_name, phone ),
-           gym_passes:pass_id ( name, price )`,
+           gym_passes:pass_id ( name )`,
         )
         .order("end_date", { ascending: true })
         .returns<SubRow[]>(),
@@ -119,7 +120,7 @@ export default async function ExpiryPage({
         name: s.profiles?.full_name ?? "Unknown",
         phone: s.profiles?.phone ?? "",
         passName: s.gym_passes?.name ?? "-",
-        passPrice: s.gym_passes?.price ?? null,
+        passPrice: s.pass_price,
         startDate: startYMD,
         endDate: endYMD,
         formattedStart: startYMD ? prettyDate(startYMD) : "-",

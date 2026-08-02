@@ -53,16 +53,18 @@ type PaymentRow = {
   subscription_id: string | null;
   subscriptions: {
     discount_amount: number | null;
+    pass_price: number | null;
     profiles: { full_name: string | null; phone: string | null } | null;
-    gym_passes: { name: string | null; price: number | null } | null;
+    gym_passes: { name: string | null } | null;
   } | null;
 };
 
 type NewMemberRow = {
   id: string;
   entry_date: string;
+  pass_price: number | null;
   profiles: { full_name: string | null; phone: string | null } | null;
-  gym_passes: { name: string | null; price: number | null } | null;
+  gym_passes: { name: string | null } | null;
 };
 
 export default async function DailyRevenueDayPage({ params }: { params: Promise<{ day: string }> }) {
@@ -97,8 +99,9 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
           `amount, payment_method, subscription_id,
            subscriptions:subscription_id (
              discount_amount,
+             pass_price,
              profiles:user_id ( full_name, phone ),
-             gym_passes:pass_id ( name, price )
+             gym_passes:pass_id ( name )
            )`,
         )
         .eq("payment_date", dayStr)
@@ -108,7 +111,7 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
     safeSelect(
       supabase
         .from("subscriptions")
-        .select(`id, entry_date, profiles:user_id ( full_name, phone ), gym_passes:pass_id ( name, price )`)
+        .select(`id, entry_date, pass_price, profiles:user_id ( full_name, phone ), gym_passes:pass_id ( name )`)
         .eq("entry_date", dayStr)
         .order("entry_date")
         .returns<NewMemberRow[]>(),
@@ -134,7 +137,7 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
 
   const paymentActivityRows: DayActivityRow[] = payRows.map((r, i) => {
     const sub = r.subscriptions;
-    const price = sub?.gym_passes?.price ?? 0;
+    const price = sub?.pass_price ?? 0;
     const discount = sub?.discount_amount ?? 0;
     const effectiveFee = Math.max(price - discount, 0);
     const balance = Math.max(effectiveFee - (paidToDate.get(r.subscription_id ?? "") ?? 0), 0);
@@ -164,10 +167,10 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
       phone: m.profiles?.phone ?? "",
       passType: m.gym_passes?.name ?? "Pass",
       paymentMethod: "",
-      packageAmount: m.gym_passes?.price ?? 0,
+      packageAmount: m.pass_price ?? 0,
       discount: 0,
       paidAmount: 0,
-      balanceAmount: m.gym_passes?.price ?? 0,
+      balanceAmount: m.pass_price ?? 0,
       isNewMember: true,
     }));
 

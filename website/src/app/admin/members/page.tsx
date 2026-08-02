@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: "Trial Balance / Ledger - Vishal Fitness Admin",
 };
 
-type SubBalanceRow = { user_id: string; discount_amount: number | null; gym_passes: { price: number | null } | null };
+type SubBalanceRow = { user_id: string; discount_amount: number | null; pass_price: number | null };
 type PaymentBalanceRow = { user_id: string; amount: number };
 
 export default async function MembersLedgerPage() {
@@ -22,7 +22,7 @@ export default async function MembersLedgerPage() {
       .neq("role", "admin")
       .order("full_name", { ascending: true })
       .returns<Omit<MemberRow, "balance">[]>(),
-    supabase.from("subscriptions").select("user_id, discount_amount, gym_passes:pass_id ( price )").returns<SubBalanceRow[]>(),
+    supabase.from("subscriptions").select("user_id, discount_amount, pass_price").returns<SubBalanceRow[]>(),
     supabase.from("payments").select("user_id, amount").returns<PaymentBalanceRow[]>(),
   ]);
 
@@ -31,7 +31,7 @@ export default async function MembersLedgerPage() {
   // still owes money vs. who's overpaid.
   const balanceByUser = new Map<string, number>();
   for (const s of subsRes.data ?? []) {
-    const fee = s.gym_passes?.price ?? 0;
+    const fee = s.pass_price ?? 0;
     const discount = s.discount_amount ?? 0;
     const netPayable = Math.max(fee - discount, 0);
     balanceByUser.set(s.user_id, (balanceByUser.get(s.user_id) ?? 0) + netPayable);

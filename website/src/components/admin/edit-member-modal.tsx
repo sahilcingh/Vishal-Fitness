@@ -94,6 +94,8 @@ export function EditMemberModal({
   const [originalStartDate, setOriginalStartDate] = useState("");
   const [entryDate, setEntryDate] = useState(toYMD(new Date()));
   const [originalEntryDate, setOriginalEntryDate] = useState("");
+  const [passPrice, setPassPrice] = useState("");
+  const [originalPassPrice, setOriginalPassPrice] = useState("");
   const [storedEndDate, setStoredEndDate] = useState("");
   const [extraDays, setExtraDays] = useState("");
 
@@ -149,19 +151,27 @@ export function EditMemberModal({
       // Otherwise fall back to the old heuristic: prefer the active
       // subscription, else the most recent one.
       let sub:
-        | { id: string; pass_id: string | null; status: string; start_date: string; end_date: string | null; entry_date: string | null }
+        | {
+            id: string;
+            pass_id: string | null;
+            status: string;
+            start_date: string;
+            end_date: string | null;
+            entry_date: string | null;
+            pass_price: number | null;
+          }
         | undefined;
       if (targetSubscriptionId) {
         const { data } = await supabase
           .from("subscriptions")
-          .select("id, pass_id, status, start_date, end_date, entry_date")
+          .select("id, pass_id, status, start_date, end_date, entry_date, pass_price")
           .eq("id", targetSubscriptionId)
           .maybeSingle();
         sub = data ?? undefined;
       } else {
         const { data: activeSubs } = await supabase
           .from("subscriptions")
-          .select("id, pass_id, status, start_date, end_date, entry_date")
+          .select("id, pass_id, status, start_date, end_date, entry_date, pass_price")
           .eq("user_id", member.id)
           .eq("status", "active")
           .order("created_at", { ascending: false })
@@ -170,7 +180,7 @@ export function EditMemberModal({
         if (!sub) {
           const { data: anySubs } = await supabase
             .from("subscriptions")
-            .select("id, pass_id, status, start_date, end_date, entry_date")
+            .select("id, pass_id, status, start_date, end_date, entry_date, pass_price")
             .eq("user_id", member.id)
             .order("created_at", { ascending: false })
             .limit(1);
@@ -182,6 +192,7 @@ export function EditMemberModal({
       if (sub) {
         const normalizedStart = normalizeYMD(sub.start_date) || toYMD(new Date());
         const normalizedEntry = normalizeYMD(sub.entry_date) || normalizedStart;
+        const loadedPrice = String(sub.pass_price ?? 0);
         setSubscriptionId(sub.id);
         setPassId(sub.pass_id ?? "");
         setOriginalPassId(sub.pass_id ?? "");
@@ -189,6 +200,8 @@ export function EditMemberModal({
         setOriginalStartDate(normalizedStart);
         setEntryDate(normalizedEntry);
         setOriginalEntryDate(normalizedEntry);
+        setPassPrice(loadedPrice);
+        setOriginalPassPrice(loadedPrice);
         setStoredEndDate(normalizeYMD(sub.end_date));
       } else {
         setSubscriptionId(null);
@@ -198,6 +211,8 @@ export function EditMemberModal({
         setOriginalStartDate(toYMD(new Date()));
         setEntryDate(toYMD(new Date()));
         setOriginalEntryDate(toYMD(new Date()));
+        setPassPrice("");
+        setOriginalPassPrice("");
         setStoredEndDate("");
       }
       setExtraDays("");
@@ -315,14 +330,16 @@ export function EditMemberModal({
       }
 
       if (passId && subscriptionId) {
+        const passPriceNum = Math.max(parseFloat(passPrice) || 0, 0);
         const { error: subErr } = await supabase
           .from("subscriptions")
-          .update({ pass_id: passId, start_date: startDate, entry_date: entryDate, end_date: endDate })
+          .update({ pass_id: passId, start_date: startDate, entry_date: entryDate, end_date: endDate, pass_price: passPriceNum })
           .eq("id", subscriptionId);
         if (subErr) throw subErr;
 
         const entryDateChanged = entryDate !== originalEntryDate;
-        if (!unchanged || entryDateChanged) {
+        const priceChanged = passPriceNum !== (Math.max(parseFloat(originalPassPrice) || 0, 0));
+        if (!unchanged || entryDateChanged || priceChanged) {
           const subChanges: string[] = [];
           if (passId !== originalPassId) {
             const newPassName = passes.find((p) => p.id === passId)?.name;
@@ -330,6 +347,7 @@ export function EditMemberModal({
           }
           if (startDate !== originalStartDate) subChanges.push(`start date changed to ${prettyDate(startDate)}`);
           if (entryDateChanged) subChanges.push(`date changed to ${prettyDate(entryDate)}`);
+          if (priceChanged) subChanges.push(`price changed to ${formatINR(passPriceNum)}`);
           if (isValidYMD(endDate) && endDate !== storedEndDate) subChanges.push(`end date changed to ${prettyDate(endDate)}`);
           await logMemberEvent(supabase, {
             userId: member!.id,
@@ -465,7 +483,16 @@ export function EditMemberModal({
               <Dropdown
                 label="Pass Type"
                 value={passId}
-                onChange={setPassId}
+                onChange={(id) => {
+                  setPassId(id);
+                  // A sane default when switching to a different pass - only
+                  // while the admin hasn't already typed a price of their
+                  // own, so this never clobbers a deliberate manual edit.
+                  if (id !== originalPassId && passPrice === originalPassPrice) {
+                    const newPass = passes.find((p) => p.id === id);
+                    if (newPass) setPassPrice(String(newPass.price));
+                  }
+                }}
                 options={["", ...passes.map((p) => p.id)]}
                 optionLabel={(id) => {
                   if (!id) return "No pass";
@@ -481,6 +508,12 @@ export function EditMemberModal({
               value={extraDays}
               onChange={(v) => setExtraDays(v.replace(/\D/g, ""))}
               inputMode="numeric"
+            />
+            <Field
+              label="Price (₹)"
+              value={passPrice}
+              onChange={(v) => setPassPrice(v.replace(/[^\d.]/g, ""))}
+              inputMode="decimal"
             />
             <div className="sm:col-span-2">
               <InfoTile

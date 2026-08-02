@@ -253,7 +253,7 @@ export function EditMemberWorkbench({ passes, members }: { passes: Pass[]; membe
         userId={selected?.id ?? ""}
         memberName={name}
         passName={paymentsFor?.gym_passes?.name ?? "Pass"}
-        passPrice={paymentsFor?.gym_passes?.price ?? 0}
+        passPrice={paymentsFor?.pass_price ?? 0}
         discountAmount={paymentsFor?.discount_amount ?? 0}
       />
 

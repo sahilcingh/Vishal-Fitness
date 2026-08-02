@@ -17,6 +17,7 @@ export type MemberSubscriptionDetail = {
   start_date: string;
   end_date: string;
   entry_date: string;
+  pass_price: number | null;
   discount_amount: number | null;
   gym_passes: { name: string | null; price: number | null; duration_days: number | null } | null;
 };
@@ -43,7 +44,7 @@ export async function fetchMemberDetail(supabase: ReturnType<typeof createClient
       .maybeSingle<MemberProfileDetail>(),
     supabase
       .from("subscriptions")
-      .select("id, pass_id, status, start_date, end_date, entry_date, discount_amount, gym_passes:pass_id ( name, price, duration_days )")
+      .select("id, pass_id, status, start_date, end_date, entry_date, pass_price, discount_amount, gym_passes:pass_id ( name, price, duration_days )")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .returns<MemberSubscriptionDetail[]>(),

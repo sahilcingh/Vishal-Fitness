@@ -88,32 +88,42 @@ type SubActiveRow = {
   entry_date: string;
   end_date: string;
   user_id: string;
+  pass_price: number | null;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
 type SubExpiredRow = {
   end_date: string;
+  pass_price: number | null;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
 type SubMonthCreatedRow = {
   entry_date: string;
   end_date: string;
+  pass_price: number | null;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
 type SubTodayCreatedRow = {
   entry_date: string;
+  pass_price: number | null;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
+// gym_passes.price stays live here on purpose - typeWiseMap wants "what does
+// this pass type cost right now" (a per-type summary), while pass_price below
+// drives revenueByPassMap's per-member historical totals.
 type SubAllRow = {
   end_date: string;
   status: string | null;
+  pass_price: number | null;
   gym_passes: PassRef | null;
 };
 type SubNotCancelledRow = {
   id: string;
+  pass_price: number | null;
+  discount_amount: number | null;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
@@ -164,7 +174,7 @@ export default async function ReportsPage() {
       safeSelect<SubActiveRow>(
         supabase
           .from("subscriptions")
-          .select("entry_date, end_date, user_id, profiles:user_id(full_name, phone, gender), gym_passes:pass_id(name, price)")
+          .select("entry_date, end_date, user_id, pass_price, profiles:user_id(full_name, phone, gender), gym_passes:pass_id(name, price)")
           .gte("end_date", todayYMD)
           .neq("status", "cancelled")
           .order("end_date")
@@ -173,7 +183,7 @@ export default async function ReportsPage() {
       safeSelect<SubExpiredRow>(
         supabase
           .from("subscriptions")
-          .select("end_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("end_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .lt("end_date", todayYMD)
           .order("end_date", { ascending: false })
           .returns<SubExpiredRow[]>(),
@@ -181,7 +191,7 @@ export default async function ReportsPage() {
       safeSelect<SubMonthCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("entry_date, end_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("entry_date, end_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .gte("entry_date", monthStartYMD)
           .order("entry_date", { ascending: false })
           .returns<SubMonthCreatedRow[]>(),
@@ -189,18 +199,18 @@ export default async function ReportsPage() {
       safeSelect<SubTodayCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("entry_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("entry_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .eq("entry_date", todayYMD)
           .order("entry_date")
           .returns<SubTodayCreatedRow[]>(),
       ),
       safeSelect<SubAllRow>(
-        supabase.from("subscriptions").select("end_date, status, gym_passes:pass_id(name, price)").returns<SubAllRow[]>(),
+        supabase.from("subscriptions").select("end_date, status, pass_price, gym_passes:pass_id(name, price)").returns<SubAllRow[]>(),
       ),
       safeSelect<SubNotCancelledRow>(
         supabase
           .from("subscriptions")
-          .select("id, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("id, pass_price, discount_amount, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .neq("status", "cancelled")
           .returns<SubNotCancelledRow[]>(),
       ),
@@ -235,7 +245,7 @@ export default async function ReportsPage() {
       r.profiles?.full_name ?? "",
       r.profiles?.phone ?? "",
       r.gym_passes?.name ?? "",
-      (r.gym_passes?.price ?? 0).toFixed(0),
+      (r.pass_price ?? 0).toFixed(0),
       fmtDMY(r.entry_date),
       fmtDMY(r.end_date),
       daysLeft === null ? "" : daysLeft.toString(),
@@ -282,7 +292,7 @@ export default async function ReportsPage() {
       name: r.profiles?.full_name ?? "",
       phone: r.profiles?.phone ?? "",
       passName: r.gym_passes?.name ?? "",
-      price: (r.gym_passes?.price ?? 0).toFixed(0),
+      price: (r.pass_price ?? 0).toFixed(0),
       expiredOn: fmtDMY(r.end_date),
       days: daysSince === null ? "" : daysSince.toString(),
     };
@@ -294,7 +304,7 @@ export default async function ReportsPage() {
     r.profiles?.full_name ?? "",
     r.profiles?.phone ?? "",
     r.gym_passes?.name ?? "",
-    (r.gym_passes?.price ?? 0).toFixed(0),
+    (r.pass_price ?? 0).toFixed(0),
     fmtDMY(r.entry_date),
     fmtDMY(r.end_date),
   ]);
@@ -325,7 +335,7 @@ export default async function ReportsPage() {
   const revenueByPassMap = new Map<string, { price: number; count: number; total: number }>();
   for (const r of subsAll) {
     const name = r.gym_passes?.name ?? "Unknown";
-    const price = r.gym_passes?.price ?? 0;
+    const price = r.pass_price ?? 0;
     const entry = revenueByPassMap.get(name) ?? { price, count: 0, total: 0 };
     entry.count++;
     entry.total += price;
@@ -352,7 +362,7 @@ export default async function ReportsPage() {
         newSub: 0,
         installments: 0,
       };
-      entry.newSub += r.gym_passes?.price ?? 0;
+      entry.newSub += r.pass_price ?? 0;
       grouped.set(phone, entry);
     }
     for (const p of payments) {
@@ -413,7 +423,8 @@ export default async function ReportsPage() {
   }
   const outstandingBalances = subsNotCancelled
     .map((r) => {
-      const fee = r.gym_passes?.price ?? 0;
+      const fee = r.pass_price ?? 0;
+      const discount = r.discount_amount ?? 0;
       const paid = paidMap.get(r.id) ?? 0;
       return {
         name: r.profiles?.full_name ?? "",
@@ -421,7 +432,7 @@ export default async function ReportsPage() {
         passName: r.gym_passes?.name ?? "",
         fee,
         paid,
-        balance: fee - paid,
+        balance: Math.max(fee - discount - paid, 0),
       };
     })
     .filter((r) => r.balance > 0);

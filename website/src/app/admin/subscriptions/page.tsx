@@ -17,7 +17,7 @@ export default async function SubscriptionsPage() {
     supabase
       .from("subscriptions")
       .select(
-        `id, start_date, end_date, status, user_id, discount_amount, pass_id,
+        `id, start_date, end_date, status, user_id, discount_amount, pass_id, pass_price,
          profiles:user_id ( full_name, phone, photo_url, time_slot ),
          gym_passes:pass_id ( name, duration_days, price )`,
       )
