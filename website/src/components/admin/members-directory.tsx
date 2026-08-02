@@ -181,32 +181,45 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
               <Link
                 key={m.id}
                 href={`/admin/members/${m.id}`}
-                className="flex items-center gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 transition-colors hover:border-brand/40"
+                className="flex flex-wrap items-center gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 transition-colors hover:border-brand/40"
               >
-                <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-brand/12 text-[12px] font-bold text-brand">
-                  {m.photo_url ? (
-                    <Image src={m.photo_url} alt="" width={40} height={40} className="size-full object-cover" />
-                  ) : (
-                    initials(name)
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-bold">{name}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="rounded bg-brand/8 px-1.5 py-0.5 text-[9px] font-bold text-brand">
-                      {membershipNo(m.id)}
-                    </span>
-                    <span className="truncate text-[11px] text-muted-foreground">{m.phone || "-"}</span>
+                {/* Name/MBR/phone always keeps its own full-width line - it
+                    never competes for space with the Debit/Credit/View block,
+                    which is why long names/phone numbers were truncating on
+                    narrow phones (that block used to sit beside this one in
+                    a single row, squeezing it down to almost nothing). */}
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-brand/12 text-[12px] font-bold text-brand">
+                    {m.photo_url ? (
+                      <Image src={m.photo_url} alt="" width={40} height={40} className="size-full object-cover" />
+                    ) : (
+                      initials(name)
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-bold">{name}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className="shrink-0 rounded bg-brand/8 px-1.5 py-0.5 text-[9px] font-bold text-brand">
+                        {membershipNo(m.id)}
+                      </span>
+                      <span className="truncate text-[11px] text-muted-foreground">{m.phone || "-"}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <div className="w-[85px] text-right text-[13px]">
+
+                {/* On narrow screens this block doesn't fit next to the name
+                    above, so it wraps onto its own full-width line instead of
+                    squeezing the name column. On sm+ it fits inline as before. */}
+                <div className="flex w-full items-center gap-4 border-t border-border pt-3 sm:w-auto sm:gap-3 sm:border-t-0 sm:pt-0">
+                  <div className="flex-1 text-[13px] sm:w-[85px] sm:flex-none sm:text-right">
+                    <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Debit</div>
                     <DebitCell balance={m.balance} />
                   </div>
-                  <div className="w-[85px] text-right text-[13px]">
+                  <div className="flex-1 text-[13px] sm:w-[85px] sm:flex-none sm:text-right">
+                    <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Credit</div>
                     <CreditCell balance={m.balance} />
                   </div>
-                  <span className="flex w-[62px] shrink-0 items-center justify-end gap-1 text-[12px] font-semibold text-muted-foreground">
+                  <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-muted-foreground sm:w-[62px] sm:justify-end">
                     View
                     <ChevronRight className="size-3.5" />
                   </span>
