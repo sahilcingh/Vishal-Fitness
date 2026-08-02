@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CalendarRange, IndianRupee, UserCheck, UserSearch, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { nowInIST, istMidnightMs } from "@/lib/ist-time";
+import { nowInIST } from "@/lib/ist-time";
 import { ReportCard, type ReportColumn, type ReportRow } from "@/components/admin/report-card";
 import { CountUp } from "@/components/count-up";
 
@@ -85,7 +85,7 @@ type ProfileRef = { full_name: string | null; phone: string | null; gender?: str
 type PassRef = { name: string | null; price: number | null };
 
 type SubActiveRow = {
-  created_at: string;
+  entry_date: string;
   end_date: string;
   user_id: string;
   profiles: ProfileRef | null;
@@ -97,13 +97,13 @@ type SubExpiredRow = {
   gym_passes: PassRef | null;
 };
 type SubMonthCreatedRow = {
-  created_at: string;
+  entry_date: string;
   end_date: string;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
 type SubTodayCreatedRow = {
-  created_at: string;
+  entry_date: string;
   profiles: ProfileRef | null;
   gym_passes: PassRef | null;
 };
@@ -148,13 +148,10 @@ export default async function ReportsPage() {
   // comparisons against other same-way-constructed dates (parseYMD(...) -
   // the construction bias is identical on both sides so it cancels out in a
   // difference), but NOT for comparisons against a real timestamptz column.
-  // Those need istMidnightMs()/Date.now(), which give real epoch values.
+  // Those need Date.now(), which gives a real epoch value (see cutoff30Ms).
   const now = nowInIST();
   const todayYMD = toYMD(now);
   const monthStartYMD = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
-  const monthStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), 1));
-  const todayStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), now.getDate()));
-  const tomorrowStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), now.getDate() + 1));
   const in30YMD = toYMD(addDays(now, 30));
   const cutoff30Ms = new Date().getTime() - 30 * 86_400_000;
 
@@ -167,7 +164,7 @@ export default async function ReportsPage() {
       safeSelect<SubActiveRow>(
         supabase
           .from("subscriptions")
-          .select("created_at, end_date, user_id, profiles:user_id(full_name, phone, gender), gym_passes:pass_id(name, price)")
+          .select("entry_date, end_date, user_id, profiles:user_id(full_name, phone, gender), gym_passes:pass_id(name, price)")
           .gte("end_date", todayYMD)
           .neq("status", "cancelled")
           .order("end_date")
@@ -184,18 +181,17 @@ export default async function ReportsPage() {
       safeSelect<SubMonthCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("created_at, end_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
-          .gte("created_at", monthStart.toISOString())
-          .order("created_at", { ascending: false })
+          .select("entry_date, end_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .gte("entry_date", monthStartYMD)
+          .order("entry_date", { ascending: false })
           .returns<SubMonthCreatedRow[]>(),
       ),
       safeSelect<SubTodayCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("created_at, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
-          .gte("created_at", todayStart.toISOString())
-          .lt("created_at", tomorrowStart.toISOString())
-          .order("created_at")
+          .select("entry_date, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .eq("entry_date", todayYMD)
+          .order("entry_date")
           .returns<SubTodayCreatedRow[]>(),
       ),
       safeSelect<SubAllRow>(
@@ -240,7 +236,7 @@ export default async function ReportsPage() {
       r.profiles?.phone ?? "",
       r.gym_passes?.name ?? "",
       (r.gym_passes?.price ?? 0).toFixed(0),
-      fmtDMY(r.created_at),
+      fmtDMY(r.entry_date),
       fmtDMY(r.end_date),
       daysLeft === null ? "" : daysLeft.toString(),
     ];
@@ -299,7 +295,7 @@ export default async function ReportsPage() {
     r.profiles?.phone ?? "",
     r.gym_passes?.name ?? "",
     (r.gym_passes?.price ?? 0).toFixed(0),
-    fmtDMY(r.created_at),
+    fmtDMY(r.entry_date),
     fmtDMY(r.end_date),
   ]);
 

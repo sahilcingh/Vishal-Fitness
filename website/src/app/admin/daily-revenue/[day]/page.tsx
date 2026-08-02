@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { nowInIST, istMidnightMs } from "@/lib/ist-time";
+import { nowInIST } from "@/lib/ist-time";
 import { DailyRevenueExportButton } from "@/components/admin/daily-revenue-export-button";
 import { DayActivityTable, type DayActivityRow } from "@/components/admin/day-activity-table";
 import { CountUp } from "@/components/count-up";
@@ -60,7 +60,7 @@ type PaymentRow = {
 
 type NewMemberRow = {
   id: string;
-  created_at: string;
+  entry_date: string;
   profiles: { full_name: string | null; phone: string | null } | null;
   gym_passes: { name: string | null; price: number | null } | null;
 };
@@ -89,9 +89,6 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
   const nextDay = new Date(day);
   nextDay.setDate(nextDay.getDate() + 1);
 
-  const dayStartMs = istMidnightMs(day.getFullYear(), day.getMonth(), day.getDate());
-  const dayEndMs = istMidnightMs(day.getFullYear(), day.getMonth(), day.getDate() + 1);
-
   const [{ data: payRows, hadError: payRowsErrored }, { data: newMembers, hadError: newMembersErrored }] = await Promise.all([
     safeSelect(
       supabase
@@ -111,10 +108,9 @@ export default async function DailyRevenueDayPage({ params }: { params: Promise<
     safeSelect(
       supabase
         .from("subscriptions")
-        .select(`id, created_at, profiles:user_id ( full_name, phone ), gym_passes:pass_id ( name, price )`)
-        .gte("created_at", new Date(dayStartMs).toISOString())
-        .lt("created_at", new Date(dayEndMs).toISOString())
-        .order("created_at")
+        .select(`id, entry_date, profiles:user_id ( full_name, phone ), gym_passes:pass_id ( name, price )`)
+        .eq("entry_date", dayStr)
+        .order("entry_date")
         .returns<NewMemberRow[]>(),
     ),
   ]);

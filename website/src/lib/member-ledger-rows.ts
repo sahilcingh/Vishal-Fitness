@@ -4,7 +4,7 @@ export type LedgerSubscription = {
   id: string;
   start_date: string;
   end_date: string;
-  created_at: string;
+  entry_date: string;
   discount_amount: number | null;
   gym_passes: { name: string | null; price: number | null } | null;
 };
@@ -47,13 +47,13 @@ export function buildLedgerRows(subscriptions: LedgerSubscription[], payments: L
     const discount = s.discount_amount ?? 0;
     const passName = s.gym_passes?.name ?? "Pass";
     unsortedRows.push({
-      date: s.created_at,
+      date: s.entry_date,
       description: `${i === 0 ? "Subscribed to" : "Renewed to"} ${passName} (${prettyYMD(s.start_date)} → ${prettyYMD(s.end_date)})`,
       debit: fee,
       credit: 0,
     });
     if (discount > 0) {
-      unsortedRows.push({ date: s.created_at, description: `Discount applied - ${passName}`, debit: 0, credit: discount });
+      unsortedRows.push({ date: s.entry_date, description: `Discount applied - ${passName}`, debit: 0, credit: discount });
     }
   });
 
@@ -66,12 +66,10 @@ export function buildLedgerRows(subscriptions: LedgerSubscription[], payments: L
     unsortedRows.push({ date: p.payment_date, description: label, debit: 0, credit: p.amount ?? 0 });
   });
 
-  // Compare by calendar day first, not the raw string - subscriptions.created_at
-  // is a full timestamp while payments.payment_date is date-only, and comparing
-  // those as plain strings would sort the shorter date-only string before a
-  // same-day timestamp regardless of real order. On a genuine same-day tie,
-  // show the charge before the payment that settles it (the natural reading
-  // order), rather than an arbitrary string-comparison artifact.
+  // Compare by calendar day first, not the raw string - entry_date and
+  // payment_date are both plain dates, but a genuine same-day tie should
+  // still show the charge before the payment that settles it (the natural
+  // reading order), rather than an arbitrary string-comparison artifact.
   unsortedRows.sort((a, b) => {
     const dayCompare = dayKeyOf(a.date).localeCompare(dayKeyOf(b.date));
     if (dayCompare !== 0) return dayCompare;

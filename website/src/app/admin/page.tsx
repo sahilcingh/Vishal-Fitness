@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UserPlus, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { nowInIST, istMidnightMs } from "@/lib/ist-time";
+import { nowInIST } from "@/lib/ist-time";
 import { RevenueChart, type RevenueDay } from "@/components/admin/revenue-chart";
 import { MonthPicker } from "@/components/admin/month-picker";
 import { RefreshButton } from "@/components/admin/refresh-button";
@@ -77,7 +77,7 @@ export default async function OverviewPage({
   const prevMonthStartYMD = dayKey(prevMonthFirstDay);
   const prevMonthEndYMD = dayKey(prevMonthLastDay);
 
-  const todayStart = new Date(istMidnightMs(now.getFullYear(), now.getMonth(), now.getDate()));
+  const todayYMD = dayKey(now);
 
   const [
     totalMembersRes,
@@ -95,7 +95,7 @@ export default async function OverviewPage({
       supabase.from("payments").select("amount").gte("payment_date", prevMonthStartYMD).lte("payment_date", prevMonthEndYMD),
     ),
     safeSelect<{ id: string }>(
-      supabase.from("subscriptions").select("id").gte("created_at", todayStart.toISOString()),
+      supabase.from("subscriptions").select("id").eq("entry_date", todayYMD),
     ),
     safeSelect<{ end_date: string }>(
       supabase.from("subscriptions").select("end_date").neq("status", "cancelled"),
@@ -143,7 +143,6 @@ export default async function OverviewPage({
     const key = dayKey(cursor);
     chartDays.push({ date: key, label: String(cursor.getDate()), amount: revenueByDay.get(key) ?? 0 });
   }
-  const todayYMD = dayKey(now);
 
   return (
     <div>

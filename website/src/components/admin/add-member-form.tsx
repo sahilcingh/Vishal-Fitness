@@ -35,6 +35,7 @@ type MemberSubscription = {
   end_date: string;
   status: string;
   created_at: string;
+  entry_date: string;
   discount_amount: number | null;
   pass_id: string | null;
   gym_passes: { name: string | null; price: number | null; duration_days: number | null } | null;
@@ -161,6 +162,7 @@ export function AddMemberForm({
 
   const [passId, setPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
+  const [entryDate, setEntryDate] = useState(toYMD(new Date()));
   const [extraDays, setExtraDays] = useState("");
 
   const [isPercent, setIsPercent] = useState(false);
@@ -251,6 +253,7 @@ export function AddMemberForm({
     setCheckedPhone("");
     setPassId("");
     setStartDate(toYMD(new Date()));
+    setEntryDate(toYMD(new Date()));
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -356,7 +359,7 @@ export function AddMemberForm({
     const supabase = createClient();
     const { data } = await supabase
       .from("subscriptions")
-      .select("id, start_date, end_date, status, created_at, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
+      .select("id, start_date, end_date, status, created_at, entry_date, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
       .eq("user_id", userId)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
@@ -374,7 +377,7 @@ export function AddMemberForm({
     const [{ data: subs }, { data: pays }] = await Promise.all([
       supabase
         .from("subscriptions")
-        .select("id, start_date, end_date, status, created_at, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
+        .select("id, start_date, end_date, status, created_at, entry_date, discount_amount, pass_id, gym_passes:pass_id ( name, price, duration_days )")
         .eq("user_id", userId)
         .order("created_at", { ascending: true })
         .returns<MemberSubscription[]>(),
@@ -429,6 +432,7 @@ export function AddMemberForm({
     await loadMemberIdentity(basic);
     setPassId("");
     setStartDate(toYMD(new Date()));
+    setEntryDate(toYMD(new Date()));
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -567,7 +571,10 @@ export function AddMemberForm({
         .limit(1)
         .single();
 
-      const subPatch: Record<string, unknown> = {};
+      // entry_date always needs setting (create-member doesn't know about it
+      // yet, so it isn't in the initial insert) - always included, unlike
+      // discount/end_date which only patch when the admin actually set them.
+      const subPatch: Record<string, unknown> = { entry_date: entryDate };
       if (discountAmount > 0) subPatch.discount_amount = discountAmount;
       if (extraDaysNum > 0) subPatch.end_date = endDate;
       let patchFailed = false;
@@ -703,6 +710,7 @@ export function AddMemberForm({
           user_id: profile.id,
           pass_id: selectedPass!.id,
           start_date: startDate,
+          entry_date: entryDate,
           end_date: endDate,
           status: "active",
           discount_amount: discountAmount > 0 ? discountAmount : 0,
@@ -880,6 +888,13 @@ export function AddMemberForm({
                 <div className="text-[13px] text-foreground">
                   Continuing from Update Membership <span className="font-bold">{initialPhone}</span>{" "}
                   wasn&apos;t found, so fill in their details below to add them as a new member.
+                </div>
+              </div>
+            )}
+            {addingNewMembership && (
+              <div className="mb-1 flex justify-end">
+                <div className="w-[172px]">
+                  <Field label="Date *" type="date" value={entryDate} onChange={setEntryDate} />
                 </div>
               </div>
             )}
@@ -1061,6 +1076,7 @@ export function AddMemberForm({
                 </div>
                 {installments.map((row, idx) => (
                   <div key={row.key} className="grid grid-cols-2 gap-2.5 rounded-xl border border-border bg-background p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-end">
+                    <Field label="Date" type="date" value={row.date} onChange={(v) => updateInstallment(row.key, { date: v })} max={toYMD(new Date())} />
                     <Field
                       label={idx === 0 ? "Amount Paid Now (₹)" : `Installment ${idx + 1} (₹)`}
                       hint="e.g. 500"
@@ -1068,7 +1084,6 @@ export function AddMemberForm({
                       onChange={(v) => updateInstallment(row.key, { amount: v.replace(/[^\d.]/g, "") })}
                       inputMode="decimal"
                     />
-                    <Field label="Date" type="date" value={row.date} onChange={(v) => updateInstallment(row.key, { date: v })} max={toYMD(new Date())} />
                     <Dropdown label="Method" value={row.method} onChange={(v) => updateInstallment(row.key, { method: v })} options={PAYMENT_METHODS} optionLabel={(m) => m} />
                     <Field label="Note (optional)" hint="e.g. Paid by father" value={row.notes} onChange={(v) => updateInstallment(row.key, { notes: v })} />
                     {installments.length > 1 && (

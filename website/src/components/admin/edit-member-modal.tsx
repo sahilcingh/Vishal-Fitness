@@ -92,6 +92,8 @@ export function EditMemberModal({
   const [originalPassId, setOriginalPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
   const [originalStartDate, setOriginalStartDate] = useState("");
+  const [entryDate, setEntryDate] = useState(toYMD(new Date()));
+  const [originalEntryDate, setOriginalEntryDate] = useState("");
   const [storedEndDate, setStoredEndDate] = useState("");
   const [extraDays, setExtraDays] = useState("");
 
@@ -146,18 +148,20 @@ export function EditMemberModal({
       // If a specific subscription was requested, load exactly that one.
       // Otherwise fall back to the old heuristic: prefer the active
       // subscription, else the most recent one.
-      let sub: { id: string; pass_id: string | null; status: string; start_date: string; end_date: string | null } | undefined;
+      let sub:
+        | { id: string; pass_id: string | null; status: string; start_date: string; end_date: string | null; entry_date: string | null }
+        | undefined;
       if (targetSubscriptionId) {
         const { data } = await supabase
           .from("subscriptions")
-          .select("id, pass_id, status, start_date, end_date")
+          .select("id, pass_id, status, start_date, end_date, entry_date")
           .eq("id", targetSubscriptionId)
           .maybeSingle();
         sub = data ?? undefined;
       } else {
         const { data: activeSubs } = await supabase
           .from("subscriptions")
-          .select("id, pass_id, status, start_date, end_date")
+          .select("id, pass_id, status, start_date, end_date, entry_date")
           .eq("user_id", member.id)
           .eq("status", "active")
           .order("created_at", { ascending: false })
@@ -166,7 +170,7 @@ export function EditMemberModal({
         if (!sub) {
           const { data: anySubs } = await supabase
             .from("subscriptions")
-            .select("id, pass_id, status, start_date, end_date")
+            .select("id, pass_id, status, start_date, end_date, entry_date")
             .eq("user_id", member.id)
             .order("created_at", { ascending: false })
             .limit(1);
@@ -177,11 +181,14 @@ export function EditMemberModal({
 
       if (sub) {
         const normalizedStart = normalizeYMD(sub.start_date) || toYMD(new Date());
+        const normalizedEntry = normalizeYMD(sub.entry_date) || normalizedStart;
         setSubscriptionId(sub.id);
         setPassId(sub.pass_id ?? "");
         setOriginalPassId(sub.pass_id ?? "");
         setStartDate(normalizedStart);
         setOriginalStartDate(normalizedStart);
+        setEntryDate(normalizedEntry);
+        setOriginalEntryDate(normalizedEntry);
         setStoredEndDate(normalizeYMD(sub.end_date));
       } else {
         setSubscriptionId(null);
@@ -189,6 +196,8 @@ export function EditMemberModal({
         setOriginalPassId("");
         setStartDate(toYMD(new Date()));
         setOriginalStartDate(toYMD(new Date()));
+        setEntryDate(toYMD(new Date()));
+        setOriginalEntryDate(toYMD(new Date()));
         setStoredEndDate("");
       }
       setExtraDays("");
@@ -308,17 +317,19 @@ export function EditMemberModal({
       if (passId && subscriptionId) {
         const { error: subErr } = await supabase
           .from("subscriptions")
-          .update({ pass_id: passId, start_date: startDate, end_date: endDate })
+          .update({ pass_id: passId, start_date: startDate, entry_date: entryDate, end_date: endDate })
           .eq("id", subscriptionId);
         if (subErr) throw subErr;
 
-        if (!unchanged) {
+        const entryDateChanged = entryDate !== originalEntryDate;
+        if (!unchanged || entryDateChanged) {
           const subChanges: string[] = [];
           if (passId !== originalPassId) {
             const newPassName = passes.find((p) => p.id === passId)?.name;
             subChanges.push(newPassName ? `pass changed to ${newPassName}` : "pass changed");
           }
           if (startDate !== originalStartDate) subChanges.push(`start date changed to ${prettyDate(startDate)}`);
+          if (entryDateChanged) subChanges.push(`date changed to ${prettyDate(entryDate)}`);
           if (isValidYMD(endDate) && endDate !== storedEndDate) subChanges.push(`end date changed to ${prettyDate(endDate)}`);
           await logMemberEvent(supabase, {
             userId: member!.id,
@@ -463,6 +474,7 @@ export function EditMemberModal({
                 }}
               />
             </div>
+            <Field label="Date" type="date" value={entryDate} onChange={setEntryDate} />
             <Field label="Start Date" type="date" value={startDate} onChange={setStartDate} />
             <Field
               label="Extra Days"

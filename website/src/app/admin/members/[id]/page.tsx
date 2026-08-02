@@ -35,6 +35,7 @@ type SubRow = {
   end_date: string;
   status: string;
   discount_amount: number | null;
+  entry_date: string;
   created_at: string;
   gym_passes: { name: string | null; price: number | null; duration_days: number | null } | null;
 };
@@ -62,7 +63,7 @@ export default async function MemberLedgerPage({ params }: { params: Promise<{ i
   const [subsRes, paymentsRes, checkInsCountRes] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("id, pass_id, start_date, end_date, status, discount_amount, created_at, gym_passes:pass_id ( name, price, duration_days )")
+      .select("id, pass_id, start_date, end_date, status, discount_amount, entry_date, created_at, gym_passes:pass_id ( name, price, duration_days )")
       .eq("user_id", id)
       .order("created_at", { ascending: true })
       .returns<SubRow[]>(),

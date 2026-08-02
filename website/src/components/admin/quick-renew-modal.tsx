@@ -87,6 +87,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
 
   const [passId, setPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
+  const [entryDate, setEntryDate] = useState(toYMD(new Date()));
   const [extraDays, setExtraDays] = useState("");
   const [isPercent, setIsPercent] = useState(false);
   const [discount, setDiscount] = useState("");
@@ -105,6 +106,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
     setExistingSubs([]);
     setPassId("");
     setStartDate(toYMD(new Date()));
+    setEntryDate(toYMD(new Date()));
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -238,6 +240,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
           user_id: existingProfile.id,
           pass_id: selectedPass.id,
           start_date: startDate,
+          entry_date: entryDate,
           end_date: endDate,
           status: "active",
           discount_amount: discountAmount > 0 ? discountAmount : 0,
@@ -386,15 +389,16 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
                   }}
                 />
                 <div className="grid grid-cols-2 gap-3">
+                  <MiniField label="Date" type="date" value={entryDate} onChange={setEntryDate} />
                   <MiniField label="Start Date" type="date" value={startDate} onChange={setStartDate} />
-                  <MiniField
-                    label="Extra Days"
-                    hint="e.g. 5"
-                    value={extraDays}
-                    onChange={(v) => setExtraDays(v.replace(/\D/g, ""))}
-                    inputMode="numeric"
-                  />
                 </div>
+                <MiniField
+                  label="Extra Days"
+                  hint="e.g. 5"
+                  value={extraDays}
+                  onChange={(v) => setExtraDays(v.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                />
                 <div className="grid grid-cols-2 gap-3">
                   <MiniSegmented value={isPercent} onChange={setIsPercent} />
                   <MiniField
