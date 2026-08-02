@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Receipt, Loader2, CalendarDays, X } from "lucide-react";
+import { Plus, Receipt, Loader2, CalendarDays, X, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Modal } from "@/components/admin/modal";
+import { logMemberEvent } from "@/lib/member-events";
 
 type Payment = {
   id: string;
@@ -47,11 +48,16 @@ export function PaymentsModal({
   const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [showForm, setShowForm] = useState(false);
+  // null while adding a brand new payment; the payment's id while editing an
+  // existing one - the same form below serves both, just pre-filled and
+  // routed to an update instead of an insert.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Cash");
   const [date, setDate] = useState(toYMD(new Date()));
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +66,7 @@ export function PaymentsModal({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset transient state for the newly-opened subscription before the fetch starts
     setLoading(true);
     setShowForm(false);
+    setEditingId(null);
     setAmount("");
     setNotes("");
     setDate(toYMD(new Date()));
@@ -87,53 +94,132 @@ export function PaymentsModal({
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const balance = totalFee - totalPaid;
 
-  async function handleRecord() {
+  async function refetchPayments() {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("payments")
+      .select("id, amount, payment_date, payment_method, notes")
+      .eq("subscription_id", subscriptionId)
+      .order("payment_date", { ascending: false });
+    setPayments(data ?? []);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setAmount("");
+    setNotes("");
+    setDate(toYMD(new Date()));
+    setMethod("Cash");
+    setError(null);
+  }
+
+  function openAddForm() {
+    closeForm();
+    setShowForm(true);
+  }
+
+  function openEditForm(payment: Payment) {
+    setEditingId(payment.id);
+    setAmount(String(payment.amount));
+    setMethod(METHODS.find((m) => m.toLowerCase() === (payment.payment_method ?? "").toLowerCase()) ?? "Cash");
+    setDate(payment.payment_date.slice(0, 10));
+    setNotes(payment.notes ?? "");
+    setError(null);
+    setShowForm(true);
+  }
+
+  async function handleSubmitForm() {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) {
       setError("Please enter a payment amount greater than ₹0.");
       return;
     }
-    if (amt > balance) {
-      setError(`Payment of ${formatINR(amt)} exceeds the remaining balance of ${formatINR(balance)}.`);
+    // Excludes the payment being edited from "already paid" so editing one
+    // isn't blocked by its own pre-edit value.
+    const otherPaid = payments.filter((p) => p.id !== editingId).reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const balanceForThis = totalFee - otherPaid;
+    if (amt > balanceForThis) {
+      setError(`Payment of ${formatINR(amt)} exceeds the remaining balance of ${formatINR(balanceForThis)}.`);
       return;
     }
     setError(null);
     setIsSaving(true);
     const supabase = createClient();
-    // Re-clamped immediately before the insert as a last line of defense -
+    // Re-clamped immediately before the write as a last line of defense -
     // the checks above already block submission, but this keeps the actual
     // write safe even if that gate is ever bypassed.
     // NOTE: only client-side validated; add a CHECK constraint on
     // payments.amount at the DB level for a real backstop.
-    const safeAmount = Math.min(Math.max(amt, 0), balance);
+    const safeAmount = Math.min(Math.max(amt, 0), balanceForThis);
     try {
-      const { error: insertErr } = await supabase.from("payments").insert({
-        subscription_id: subscriptionId,
-        user_id: userId,
-        amount: safeAmount,
-        payment_date: date,
-        payment_method: method.toLowerCase(),
-        notes: notes.trim() || null,
-      });
-      if (insertErr) throw insertErr;
-      setAmount("");
-      setNotes("");
-      setShowForm(false);
-      setDate(toYMD(new Date()));
-      setMethod("Cash");
-
-      const { data } = await supabase
-        .from("payments")
-        .select("id, amount, payment_date, payment_method, notes")
-        .eq("subscription_id", subscriptionId)
-        .order("payment_date", { ascending: false });
-      setPayments(data ?? []);
+      if (editingId) {
+        const { error: updateErr } = await supabase
+          .from("payments")
+          .update({
+            amount: safeAmount,
+            payment_date: date,
+            payment_method: method.toLowerCase(),
+            notes: notes.trim() || null,
+          })
+          .eq("id", editingId);
+        if (updateErr) throw updateErr;
+        await logMemberEvent(supabase, {
+          userId,
+          subscriptionId,
+          eventType: "payment_edit",
+          description: `Edited payment to ${formatINR(safeAmount)} on ${prettyDate(date)}`,
+        });
+      } else {
+        const { error: insertErr } = await supabase.from("payments").insert({
+          subscription_id: subscriptionId,
+          user_id: userId,
+          amount: safeAmount,
+          payment_date: date,
+          payment_method: method.toLowerCase(),
+          notes: notes.trim() || null,
+        });
+        if (insertErr) throw insertErr;
+      }
+      closeForm();
+      await refetchPayments();
       onRecorded();
     } catch (err) {
       const msg = (err as { message?: string } | null)?.message;
-      setError(`Could not record the payment${msg ? `: ${msg}` : ". Please try again."}`);
+      setError(`Could not ${editingId ? "update" : "record"} the payment${msg ? `: ${msg}` : ". Please try again."}`);
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDelete(payment: Payment) {
+    if (
+      !window.confirm(
+        `Delete the ${formatINR(payment.amount)} payment from ${prettyDate(payment.payment_date)}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(payment.id);
+    setError(null);
+    const supabase = createClient();
+    try {
+      const { error: delErr } = await supabase.from("payments").delete().eq("id", payment.id);
+      if (delErr) throw delErr;
+      await logMemberEvent(supabase, {
+        userId,
+        subscriptionId,
+        eventType: "payment_delete",
+        description: `Deleted ${formatINR(payment.amount)} payment from ${prettyDate(payment.payment_date)}`,
+      });
+      if (editingId === payment.id) closeForm();
+      await refetchPayments();
+      onRecorded();
+    } catch (err) {
+      const msg = (err as { message?: string } | null)?.message;
+      setError(`Could not delete the payment${msg ? `: ${msg}` : ". Please try again."}`);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -147,7 +233,7 @@ export function PaymentsModal({
         <div className="flex shrink-0 items-center gap-2">
           {!showForm && (
             <button
-              onClick={() => setShowForm(true)}
+              onClick={openAddForm}
               className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[13px] font-bold text-on-brand"
             >
               <Plus className="size-3.5" />
@@ -173,7 +259,7 @@ export function PaymentsModal({
       {showForm && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-muted p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Record Payment
+            {editingId ? "Edit Payment" : "Record Payment"}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <label className="rounded-lg border border-border bg-card px-3 py-2">
@@ -209,20 +295,17 @@ export function PaymentsModal({
 
           <div className="mt-3 flex gap-2.5">
             <button
-              onClick={() => {
-                setShowForm(false);
-                setError(null);
-              }}
+              onClick={closeForm}
               className="flex-1 rounded-lg border border-border py-2.5 text-[13px] font-semibold text-muted-foreground"
             >
               Cancel
             </button>
             <button
-              onClick={handleRecord}
+              onClick={handleSubmitForm}
               disabled={isSaving}
               className="flex-[2] rounded-lg bg-brand py-2.5 text-[13px] font-bold text-on-brand disabled:opacity-50"
             >
-              {isSaving ? "Saving…" : "Record Payment"}
+              {isSaving ? "Saving…" : editingId ? "Save Changes" : "Record Payment"}
             </button>
           </div>
         </div>
@@ -238,7 +321,10 @@ export function PaymentsModal({
         ) : (
           <div className="flex flex-col gap-2">
             {payments.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
+              <div
+                key={p.id}
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${editingId === p.id ? "border-brand/40 bg-brand/6" : "border-border bg-background"}`}
+              >
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/10">
                   <Receipt className="size-4 text-brand" />
                 </span>
@@ -251,6 +337,25 @@ export function PaymentsModal({
                     {(p.payment_method ?? "cash").toUpperCase()}
                   </div>
                   <div className="mt-0.5 text-[11.5px] text-muted-foreground">{prettyDate(p.payment_date)}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openEditForm(p)}
+                    aria-label="Edit payment"
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-brand"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p)}
+                    disabled={deletingId === p.id}
+                    aria-label="Delete payment"
+                    className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  </button>
                 </div>
               </div>
             ))}

@@ -10,7 +10,8 @@ import '../../core/utils/responsive_utils.dart';
 import '../../main.dart';
 
 class AdminAddMemberScreen extends StatefulWidget {
-  const AdminAddMemberScreen({super.key});
+  final String? initialPhone;
+  const AdminAddMemberScreen({super.key, this.initialPhone});
 
   @override
   State<AdminAddMemberScreen> createState() => _AdminAddMemberScreenState();
@@ -43,6 +44,7 @@ class _AdminAddMemberScreenState extends State<AdminAddMemberScreen> {
   void initState() {
     super.initState();
     _fetchPasses();
+    if (widget.initialPhone != null) _phoneController.text = widget.initialPhone!;
   }
 
   @override

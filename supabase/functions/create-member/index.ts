@@ -8,6 +8,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Best-effort cleanup after a failed profile/subscription insert. Without
+// checking this, a failed rollback leaves a silent orphan: an auth user
+// with no matching profile row, which then blocks re-registering the same
+// phone/email with no visible cause (the error the admin sees is just
+// "already registered", nothing points at the real, already-failed cleanup).
+async function rollbackAuthUser(supabase: ReturnType<typeof createClient>, userId: string): Promise<string | null> {
+  const { error } = await supabase.auth.admin.deleteUser(userId)
+  if (error) {
+    console.error(`rollbackAuthUser: failed to delete orphaned auth user ${userId}:`, error)
+    return error.message
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -22,7 +36,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { name, phone, email, gender, pass_id, start_date } = await req.json()
+    const { name, phone, email, gender, address, pass_id, start_date } = await req.json()
 
     if (!name || !phone || !pass_id || !start_date) {
       return new Response(
@@ -87,15 +101,16 @@ Deno.serve(async (req) => {
       full_name: (name as string).trim(),
       phone: (phone as string).trim(),
       gender: gender || null,
+      address: address || null,
       updated_at: new Date().toISOString(),
     })
 
     if (profileError) {
-      await supabase.auth.admin.deleteUser(userId)
-      return new Response(
-        JSON.stringify({ error: `Profile error: ${profileError.message}` }),
-        { status: 500, headers: corsHeaders },
-      )
+      const rollbackError = await rollbackAuthUser(supabase, userId)
+      const message = rollbackError
+        ? `Profile error: ${profileError.message}. Additionally, cleanup failed (${rollbackError}) - auth user ${userId} is now orphaned and must be deleted manually from Supabase Authentication before this phone/email can be reused.`
+        : `Profile error: ${profileError.message}`
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders })
     }
 
     // Insert subscription
@@ -108,11 +123,11 @@ Deno.serve(async (req) => {
     })
 
     if (subError) {
-      await supabase.auth.admin.deleteUser(userId)
-      return new Response(
-        JSON.stringify({ error: `Subscription error: ${subError.message}` }),
-        { status: 500, headers: corsHeaders },
-      )
+      const rollbackError = await rollbackAuthUser(supabase, userId)
+      const message = rollbackError
+        ? `Subscription error: ${subError.message}. Additionally, cleanup failed (${rollbackError}) - auth user ${userId} is now orphaned and must be deleted manually from Supabase Authentication before this phone/email can be reused.`
+        : `Subscription error: ${subError.message}`
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders })
     }
 
     return new Response(

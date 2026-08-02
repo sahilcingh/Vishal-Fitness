@@ -9,6 +9,7 @@ import '../../main.dart';
 import 'package:intl/intl.dart';
 import 'admin_add_member_screen.dart';
 import 'admin_daily_revenue_screen.dart';
+import 'admin_quick_renew_modal.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final VoidCallback onViewReports;
@@ -862,6 +863,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               MaterialPageRoute(
                 builder: (_) => const AdminAddMemberScreen(),
               ),
+            ),
+          ),
+          SizedBox(width: context.w(12)),
+          _buildActionPill(
+            context,
+            icon: Icons.autorenew,
+            label: 'Quick Renew',
+            color: AppColors.brand,
+            onTap: () => showDialog(
+              context: context,
+              builder: (_) => const AdminQuickRenewModal(),
             ),
           ),
           SizedBox(width: context.w(12)),

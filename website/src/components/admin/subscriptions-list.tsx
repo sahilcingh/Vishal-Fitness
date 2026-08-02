@@ -87,6 +87,7 @@ export function SubscriptionsList({
   const [discountFor, setDiscountFor] = useState<SubscriptionRow | null>(null);
   const [paymentsFor, setPaymentsFor] = useState<SubscriptionRow | null>(null);
   const [editingMember, setEditingMember] = useState<EditableMember | null>(null);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
 
   const passTypes = useMemo(() => {
     const seen = new Set<string>();
@@ -404,7 +405,10 @@ export function SubscriptionsList({
                     <div className="mt-3.5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setEditingMember({ id: sub.user_id, full_name: profile?.full_name ?? null, phone: profile?.phone ?? null })}
+                          onClick={() => {
+                            setEditingMember({ id: sub.user_id, full_name: profile?.full_name ?? null, phone: profile?.phone ?? null });
+                            setEditingSubId(sub.id);
+                          }}
                           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12px] font-semibold"
                         >
                           <Pencil className="size-3.5" />
@@ -437,7 +441,16 @@ export function SubscriptionsList({
         }}
       />
 
-      <EditMemberModal member={editingMember} passes={passes} onClose={() => setEditingMember(null)} onSaved={() => router.refresh()} />
+      <EditMemberModal
+        member={editingMember}
+        passes={passes}
+        targetSubscriptionId={editingSubId}
+        onClose={() => {
+          setEditingMember(null);
+          setEditingSubId(null);
+        }}
+        onSaved={() => router.refresh()}
+      />
 
       {discountFor && (
         <DiscountModal

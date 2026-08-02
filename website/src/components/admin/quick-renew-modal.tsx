@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Check, ArrowRight, UserX, ChevronDown } from "lucide-react";
+import { Loader2, Check, ArrowRight, UserX, ChevronDown, Plus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
+import { clampInstallments } from "@/lib/installments";
 import { Modal } from "@/components/admin/modal";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
@@ -19,11 +20,22 @@ type SubHistoryRow = {
 
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
 
+type InstallmentRow = { key: string; amount: string; date: string; method: string; notes: string };
+function seedInstallment(): InstallmentRow {
+  return { key: `seed-${Date.now()}`, amount: "", date: toYMD(new Date()), method: "Cash", notes: "" };
+}
+
 function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+// Supabase returns `date` columns as bare "YYYY-MM-DD" but `timestamp`/
+// `timestamptz` columns as a full ISO string ("YYYY-MM-DDTHH:mm:ss+00:00") -
+// slicing to the first 10 chars before splitting means every caller gets a
+// real y/m/d regardless of which shape came back, instead of silently
+// parsing an Invalid Date (e.g. `Number("14T00:00:00+00")` is NaN) that
+// then made every active-pass check below evaluate to false.
 function parseYMD(s: string) {
-  const [y, m, d] = s.split("-").map(Number);
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 function isValidYMD(s: string) {
@@ -78,10 +90,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
   const [extraDays, setExtraDays] = useState("");
   const [isPercent, setIsPercent] = useState(false);
   const [discount, setDiscount] = useState("");
-  const [paidAmount, setPaidAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState(toYMD(new Date()));
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [notes, setNotes] = useState("");
+  const [installments, setInstallments] = useState<InstallmentRow[]>([seedInstallment()]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,10 +108,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
-    setPaidAmount("");
-    setPaymentDate(toYMD(new Date()));
-    setPaymentMethod("Cash");
-    setNotes("");
+    setInstallments([seedInstallment()]);
     setError(null);
     setSuccess(null);
   }
@@ -158,14 +164,31 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
     ? Math.min(Math.max((passPrice * discountVal) / 100, 0), passPrice)
     : Math.min(Math.max(discountVal, 0), passPrice);
   const effectivePrice = Math.max(passPrice - discountAmount, 0);
-  const paidAmountNum = parseFloat(paidAmount) || 0;
-  const safePaidAmount = Math.min(Math.max(paidAmountNum, 0), effectivePrice);
-  const balance = Math.max(effectivePrice - paidAmountNum, 0);
+
+  const parsedInstallments = installments.map((r) => ({ ...r, amountNum: parseFloat(r.amount) || 0 }));
+  const rawInstallmentsTotal = parsedInstallments.reduce((sum, r) => sum + r.amountNum, 0);
+  const safeInstallments = clampInstallments(parsedInstallments, effectivePrice);
+  const newPaidTotal = safeInstallments.reduce((sum, r) => sum + r.safeAmount, 0);
+  const balance = Math.max(effectivePrice - rawInstallmentsTotal, 0);
+
+  function addInstallmentRow() {
+    setInstallments((rows) => [...rows, { key: `${Date.now()}-${rows.length}`, amount: "", date: toYMD(new Date()), method: "Cash", notes: "" }]);
+  }
+  function updateInstallment(key: string, patch: Partial<InstallmentRow>) {
+    setInstallments((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+  function removeInstallment(key: string) {
+    setInstallments((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+  }
 
   async function handleUpdateMembership() {
     if (!existingProfile) return;
     if (!selectedPass) {
       setError("Please select a pass type.");
+      return;
+    }
+    if (rawInstallmentsTotal > effectivePrice) {
+      setError(`Amount paid (${formatINR(rawInstallmentsTotal)}) exceeds the final price (${formatINR(effectivePrice)}).`);
       return;
     }
     setError(null);
@@ -224,15 +247,18 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
       if (subErr || !sub) throw subErr;
 
       let paymentFailed = false;
-      if (safePaidAmount > 0) {
-        const { error: paymentErr } = await supabase.from("payments").insert({
+      const paymentRows = safeInstallments
+        .filter((r) => r.safeAmount > 0)
+        .map((r, i) => ({
           subscription_id: sub.id,
           user_id: existingProfile.id,
-          amount: safePaidAmount,
-          payment_date: paymentDate,
-          payment_method: paymentMethod.toLowerCase(),
-          notes: notes.trim() || "Payment at renewal",
-        });
+          amount: r.safeAmount,
+          payment_date: r.date,
+          payment_method: r.method.toLowerCase(),
+          notes: r.notes.trim() || (i === 0 ? "Payment at renewal" : null),
+        }));
+      if (paymentRows.length > 0) {
+        const { error: paymentErr } = await supabase.from("payments").insert(paymentRows);
         paymentFailed = !!paymentErr;
       }
 
@@ -240,7 +266,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
 
       if (paymentFailed) {
         setError(
-          `Membership updated, but recording the ${formatINR(safePaidAmount)} payment failed - add it manually from the Subscriptions page.`,
+          `Membership updated, but recording the ${formatINR(newPaidTotal)} payment failed - add it manually from the Subscriptions page.`,
         );
         setIsSubmitting(false);
         return;
@@ -383,30 +409,53 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
                 {selectedPass && (
                   <div className="flex justify-around rounded-xl border border-border bg-background p-3">
                     <MiniStat label="FINAL" value={formatINR(effectivePrice)} bold />
-                    <MiniStat label="PAID" value={formatINR(paidAmountNum)} className="text-brand" />
+                    <MiniStat label="PAID" value={formatINR(rawInstallmentsTotal)} className="text-brand" />
                     <MiniStat label="BALANCE" value={formatINR(balance)} className={balance > 0 ? "text-energy" : "text-brand"} />
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <MiniField
-                    label="Amount Paid (₹)"
-                    hint="e.g. 1500"
-                    value={paidAmount}
-                    onChange={(v) => setPaidAmount(v.replace(/[^\d.]/g, ""))}
-                    inputMode="decimal"
-                  />
-                  <MiniField label="Payment Date" type="date" value={paymentDate} onChange={setPaymentDate} max={toYMD(new Date())} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <MiniDropdown
-                    label="Payment Method"
-                    value={paymentMethod}
-                    onChange={setPaymentMethod}
-                    options={PAYMENT_METHODS}
-                    optionLabel={(m) => m}
-                  />
-                  <MiniField label="Note (optional)" hint="e.g. Paid by father" value={notes} onChange={setNotes} />
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Installments</div>
+                    <button type="button" onClick={addInstallmentRow} className="flex items-center gap-1 text-[11.5px] font-bold text-brand">
+                      <Plus className="size-3.5" />
+                      Add Installment
+                    </button>
+                  </div>
+                  {installments.map((row, idx) => (
+                    <div key={row.key} className="rounded-xl border border-border bg-card p-2.5">
+                      <div className="grid grid-cols-2 gap-3">
+                        <MiniField
+                          label={idx === 0 ? "Amount Paid (₹)" : `Installment ${idx + 1} (₹)`}
+                          hint="e.g. 1500"
+                          value={row.amount}
+                          onChange={(v) => updateInstallment(row.key, { amount: v.replace(/[^\d.]/g, "") })}
+                          inputMode="decimal"
+                        />
+                        <MiniField label="Payment Date" type="date" value={row.date} onChange={(v) => updateInstallment(row.key, { date: v })} max={toYMD(new Date())} />
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <MiniDropdown
+                          label="Payment Method"
+                          value={row.method}
+                          onChange={(v) => updateInstallment(row.key, { method: v })}
+                          options={PAYMENT_METHODS}
+                          optionLabel={(m) => m}
+                        />
+                        <MiniField label="Note (optional)" hint="e.g. Paid by father" value={row.notes} onChange={(v) => updateInstallment(row.key, { notes: v })} />
+                      </div>
+                      {installments.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeInstallment(row.key)}
+                          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-1.5 text-[11.5px] font-semibold text-muted-foreground hover:border-danger hover:text-danger"
+                        >
+                          <X className="size-3.5" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 

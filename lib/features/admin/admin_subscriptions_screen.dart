@@ -8,6 +8,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../main.dart';
 import 'package:intl/intl.dart';
+import '../../core/services/member_events_service.dart';
 import 'admin_edit_member_screen.dart';
 
 class AdminSubscriptionsScreen extends StatefulWidget {
@@ -315,10 +316,22 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
     );
   }
 
-  Future<void> _updateStatus(String id, String newStatus) async {
+  static const Map<String, String> _statusLabel = {
+    'active': 'Marked active',
+    'suspended': 'Suspended',
+    'cancelled': 'Cancelled',
+  };
+
+  Future<void> _updateStatus(String id, String userId, String newStatus) async {
     try {
       await supabase.from('subscriptions').update({'status': newStatus}).eq('id', id);
       _fetchSubscriptions();
+      logMemberEvent(
+        userId: userId,
+        subscriptionId: id,
+        eventType: 'status_change',
+        description: _statusLabel[newStatus] ?? 'Status changed to $newStatus',
+      );
     } catch (e) {
       debugPrint('Error updating status: $e');
     }
@@ -337,16 +350,23 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
     );
   }
 
-  Future<void> _setDiscount(String subscriptionId, double amount) async {
+  Future<void> _setDiscount(String subscriptionId, String userId, double amount) async {
     try {
       await supabase.from('subscriptions').update({'discount_amount': amount}).eq('id', subscriptionId);
       _fetchSubscriptions();
+      final currency = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
+      logMemberEvent(
+        userId: userId,
+        subscriptionId: subscriptionId,
+        eventType: 'discount_change',
+        description: amount > 0 ? 'Discount set to ${currency.format(amount)}' : 'Discount removed',
+      );
     } catch (e) {
       debugPrint('Error setting discount: $e');
     }
   }
 
-  void _showDiscountDialog(String subscriptionId, double passPrice, double currentDiscount) {
+  void _showDiscountDialog(String subscriptionId, String userId, double passPrice, double currentDiscount) {
     bool isPercent = false;
     final controller = TextEditingController(
       text: currentDiscount > 0 ? currentDiscount.toStringAsFixed(0) : '',
@@ -443,7 +463,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
             ),
             TextButton(
               onPressed: () {
-                _setDiscount(subscriptionId, 0);
+                _setDiscount(subscriptionId, userId, 0);
                 Navigator.pop(ctx);
               },
               child: Text('Remove', style: TextStyle(color: AppColors.energy)),
@@ -486,7 +506,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                   return;
                 }
                 final discountAmt = isPercent ? (passPrice * val! / 100) : val!;
-                _setDiscount(subscriptionId, discountAmt);
+                _setDiscount(subscriptionId, userId, discountAmt);
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(
@@ -946,7 +966,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                     discountAmount > 0 ? AppColors.brand : context.mutedFg,
                                                   ),
                                                   TextButton.icon(
-                                                    onPressed: () => _showDiscountDialog(id, totalFee, discountAmount),
+                                                    onPressed: () => _showDiscountDialog(id, sub['user_id'] as String, totalFee, discountAmount),
                                                     icon: Icon(Icons.local_offer_outlined, size: context.r(14)),
                                                     label: Text('Set', style: TextStyle(fontSize: context.sp(12))),
                                                     style: TextButton.styleFrom(foregroundColor: AppColors.brand),
@@ -1253,7 +1273,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen> {
                                                         ),
                                                       ],
                                                     ),
-                                                    onSelected: (val) => _updateStatus(id, val),
+                                                    onSelected: (val) => _updateStatus(id, sub['user_id'] as String, val),
                                                     itemBuilder: (context) => [
                                                       const PopupMenuItem(
                                                         value: 'active',

@@ -9,6 +9,7 @@ import {
   Receipt,
   Users,
   UserPlus,
+  UserCog,
   CalendarClock,
   Ticket,
   Megaphone,
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
 
 const MANAGE_ITEMS = [
   { href: "/admin/add-member", label: "Add Member", icon: UserPlus },
+  { href: "/admin/edit-member", label: "Edit Member", icon: UserCog },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: Users },
   { href: "/admin/classes", label: "Classes", icon: CalendarClock },
   { href: "/admin/passes", label: "Passes", icon: Ticket },

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
+import '../../core/services/member_events_service.dart';
 import '../../main.dart';
 
 class AdminEditMemberScreen extends StatefulWidget {
@@ -52,6 +53,12 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
   String? _memberEmail;
   bool _isResettingPassword = false;
 
+  // Captured at load time so _submit can log only what actually changed.
+  String _originalName = '';
+  String _originalPhone = '';
+  String? _originalGender;
+  String _originalTimeSlot = '';
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +93,10 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
           _selectedGender = res?['gender'] as String?;
           _timeSlotController.text = res?['time_slot'] as String? ?? '';
           _existingPhotoUrl = res?['photo_url'] as String?;
+          _originalName = _nameController.text;
+          _originalPhone = _phoneController.text;
+          _originalGender = _selectedGender;
+          _originalTimeSlot = _timeSlotController.text;
           _isLoading = false;
         });
         _fetchMemberEmail(phone);
@@ -102,6 +113,8 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
           setState(() {
             _nameController.text = res?['full_name'] as String? ?? '';
             _phoneController.text = res?['phone'] as String? ?? '';
+            _originalName = _nameController.text;
+            _originalPhone = _phoneController.text;
             _isLoading = false;
           });
         }
@@ -116,6 +129,7 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
           if (mounted) {
             setState(() {
               _nameController.text = res?['full_name'] as String? ?? '';
+              _originalName = _nameController.text;
               _isLoading = false;
             });
           }
@@ -486,12 +500,42 @@ class _AdminEditMemberScreenState extends State<AdminEditMemberScreen> {
         });
       }
 
+      final changedFields = <String>[];
+      if (_nameController.text.trim() != _originalName.trim()) changedFields.add('name');
+      if (_phoneController.text.trim() != _originalPhone.trim()) changedFields.add('phone');
+      if (_selectedGender != _originalGender) changedFields.add('gender');
+      if (_timeSlotController.text.trim() != _originalTimeSlot.trim()) changedFields.add('time slot');
+      if (profileUpdate.containsKey('photo_url')) changedFields.add('photo');
+      if (changedFields.isNotEmpty) {
+        logMemberEvent(
+          userId: widget.userId,
+          eventType: 'profile_edit',
+          description: 'Updated ${changedFields.join(", ")}',
+        );
+      }
+
       if (_selectedPass != null) {
+        final subChanges = <String>[];
+        if (_selectedPass!['id'] != widget.initialPassId) {
+          subChanges.add('pass changed to ${_selectedPass!['name']}');
+        }
+        if (_startDate != widget.initialStartDate) {
+          subChanges.add('start date changed to ${DateFormat('MMM d, yyyy').format(_startDate)}');
+        }
+        if (_extraDays != 0) {
+          subChanges.add('end date changed to ${DateFormat('MMM d, yyyy').format(_endDate)}');
+        }
         await supabase.from('subscriptions').update({
           'pass_id': _selectedPass!['id'],
           'start_date': DateFormat('yyyy-MM-dd').format(_startDate),
           'end_date': DateFormat('yyyy-MM-dd').format(_endDate),
         }).eq('id', widget.subscriptionId);
+        logMemberEvent(
+          userId: widget.userId,
+          subscriptionId: widget.subscriptionId,
+          eventType: 'subscription_edit',
+          description: subChanges.isNotEmpty ? subChanges.join('; ') : 'Subscription updated',
+        );
       }
 
       // Update email if admin changed it

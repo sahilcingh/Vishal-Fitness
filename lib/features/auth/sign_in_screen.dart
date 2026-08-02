@@ -363,7 +363,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         : 'Your streak is waiting. Let\'s pick up where you left off.',
                     key: ValueKey(isAdminMode),
                     style: AppStyles.bodyFont.copyWith(
-                      color: context.mutedFg,
+                      color: isAdminMode ? Colors.white70 : context.mutedFg,
                       height: 1.5,
                       fontSize: context.sp(15),
                     ),
@@ -435,7 +435,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           : 'Your streak is waiting. Let\'s pick up where you\nleft off.',
                       key: ValueKey(isAdminMode),
                       style: AppStyles.bodyFont.copyWith(
-                        color: context.mutedFg,
+                        color: isAdminMode ? Colors.white70 : context.mutedFg,
                         height: 1.5,
                         fontSize: context.sp(14),
                       ),
@@ -627,7 +627,7 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Text(
                 isAdminMode ? 'SECURE ACCESS' : 'WELCOME BACK',
                 style: AppStyles.eyebrow.copyWith(
-                  color: context.mutedFg,
+                  color: isAdminMode ? Colors.white70 : context.mutedFg,
                   fontSize: context.sp(10),
                 ),
               ),
@@ -675,7 +675,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget _buildAuthCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: context.card,
+        color: isAdminMode ? Colors.black.withValues(alpha: 0.4) : context.card,
         borderRadius: BorderRadius.circular(context.r(AppStyles.radiusLg)),
         boxShadow: [
           BoxShadow(
@@ -772,12 +772,12 @@ class _SignInScreenState extends State<SignInScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Icon(Icons.fingerprint, color: context.mutedFg, size: context.w(12)),
+              Icon(Icons.fingerprint, color: Colors.white70, size: context.w(12)),
               SizedBox(width: context.w(4)),
               Flexible(
                 child: Text(
                   'Biometrics enabled',
-                  style: AppStyles.eyebrow.copyWith(color: context.mutedFg, fontSize: context.sp(9)),
+                  style: AppStyles.eyebrow.copyWith(color: Colors.white70, fontSize: context.sp(9)),
                   textAlign: TextAlign.end,
                 ),
               ),
@@ -995,7 +995,7 @@ class _SignInScreenState extends State<SignInScreen> {
       child: Text(
         label,
         style: AppStyles.eyebrow.copyWith(
-          color: context.mutedFg,
+          color: isAdminMode ? Colors.white70 : context.mutedFg,
           fontSize: context.sp(10),
         ),
       ),
@@ -1023,7 +1023,7 @@ class _SignInScreenState extends State<SignInScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: AppStyles.bodyFont.copyWith(
-            color: context.mutedFg,
+            color: isAdminMode ? Colors.white38 : context.mutedFg,
             letterSpacing: isObscured ? 4 : 0,
             fontSize: context.sp(14),
           ),
@@ -1270,7 +1270,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 style: AppStyles.bodyFont.copyWith(
                   fontSize: context.sp(15),
                   fontWeight: FontWeight.w700,
-                  color: context.fg,
+                  color: isAdminMode ? Colors.white : context.fg,
                 ),
               ),
               SizedBox(height: context.h(3)),
@@ -1278,7 +1278,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 subtitle,
                 style: AppStyles.bodyFont.copyWith(
                   fontSize: context.sp(13),
-                  color: context.mutedFg,
+                  color: isAdminMode ? Colors.white70 : context.mutedFg,
                   height: 1.4,
                 ),
               ),
@@ -1311,7 +1311,7 @@ class _SignInScreenState extends State<SignInScreen> {
           children: [
             Icon(
               isAdminMode ? Icons.person : Icons.admin_panel_settings,
-              color: context.mutedFg.withValues(alpha: 0.5),
+              color: isAdminMode ? Colors.white.withValues(alpha: 0.5) : context.mutedFg.withValues(alpha: 0.5),
               size: context.w(14),
             ),
             SizedBox(width: context.w(6)),
@@ -1319,7 +1319,7 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Text(
                 isAdminMode ? 'RETURN TO MEMBER LOGIN' : 'STAFF / ADMIN ACCESS',
                 style: AppStyles.eyebrow.copyWith(
-                  color: context.mutedFg.withValues(alpha: 0.5),
+                  color: isAdminMode ? Colors.white.withValues(alpha: 0.5) : context.mutedFg.withValues(alpha: 0.5),
                   letterSpacing: 2.5,
                   fontSize: context.sp(10),
                 ),

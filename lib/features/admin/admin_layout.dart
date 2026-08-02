@@ -7,6 +7,8 @@ import '../../core/theme/app_styles.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../main.dart'; // Contains supabase client and AuthGate
 import 'admin_dashboard_screen.dart';
+import 'admin_daily_revenue_screen.dart';
+import 'admin_members_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_classes_screen.dart';
 import 'admin_passes_screen.dart';
@@ -24,7 +26,7 @@ class AdminLayout extends StatefulWidget {
 class _AdminLayoutState extends State<AdminLayout> {
   int _currentIndex = 0;
 
-  void _switchToReports() => setState(() => _currentIndex = 5);
+  void _switchToReports() => setState(() => _currentIndex = 7);
 
   @override
   Widget build(BuildContext context) {
@@ -51,23 +53,29 @@ class _AdminLayoutState extends State<AdminLayout> {
                         key: ValueKey('admin_tab_0_active_${_currentIndex == 0}'),
                         onViewReports: _switchToReports,
                       ),
-                      AdminSubscriptionsScreen(
+                      AdminDailyRevenueScreen(
                         key: ValueKey('admin_tab_1_active_${_currentIndex == 1}'),
                       ),
-                      AdminClassesScreen(
+                      AdminMembersScreen(
                         key: ValueKey('admin_tab_2_active_${_currentIndex == 2}'),
                       ),
-                      AdminPassesScreen(
+                      AdminSubscriptionsScreen(
                         key: ValueKey('admin_tab_3_active_${_currentIndex == 3}'),
                       ),
-                      AdminAnnouncementsScreen(
+                      AdminClassesScreen(
                         key: ValueKey('admin_tab_4_active_${_currentIndex == 4}'),
                       ),
-                      AdminExpiryScreen(
+                      AdminPassesScreen(
                         key: ValueKey('admin_tab_5_active_${_currentIndex == 5}'),
                       ),
-                      AdminReportsScreen(
+                      AdminAnnouncementsScreen(
                         key: ValueKey('admin_tab_6_active_${_currentIndex == 6}'),
+                      ),
+                      AdminExpiryScreen(
+                        key: ValueKey('admin_tab_7_active_${_currentIndex == 7}'),
+                      ),
+                      AdminReportsScreen(
+                        key: ValueKey('admin_tab_8_active_${_currentIndex == 8}'),
                       ),
                     ],
                   ),
@@ -147,16 +155,23 @@ class _AdminLayoutState extends State<AdminLayout> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(child: _buildNavItem(0, Icons.bar_chart, 'Stats')),
-          Expanded(child: _buildNavItem(1, Icons.people, 'Subs')),
-          Expanded(child: _buildNavItem(2, Icons.event, 'Classes')),
-          Expanded(child: _buildNavItem(3, Icons.local_activity, 'Passes')),
-          Expanded(child: _buildNavItem(4, Icons.campaign, 'Alerts')),
-          Expanded(child: _buildNavItem(5, Icons.hourglass_bottom, 'Expiry')),
-          Expanded(child: _buildNavItem(6, Icons.assessment_outlined, 'Reports')),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.symmetric(horizontal: context.w(4)),
+        child: Row(
+          children: [
+            _buildNavItem(0, Icons.bar_chart, 'Stats'),
+            _buildNavItem(1, Icons.calendar_month, 'Revenue'),
+            _buildNavItem(2, Icons.menu_book_outlined, 'Ledger'),
+            _buildNavItem(3, Icons.people, 'Subs'),
+            _buildNavItem(4, Icons.event, 'Classes'),
+            _buildNavItem(5, Icons.local_activity, 'Passes'),
+            _buildNavItem(6, Icons.campaign, 'Alerts'),
+            _buildNavItem(7, Icons.hourglass_bottom, 'Expiry'),
+            _buildNavItem(8, Icons.assessment_outlined, 'Reports'),
+          ],
+        ),
       ),
     );
   }
@@ -169,6 +184,7 @@ class _AdminLayoutState extends State<AdminLayout> {
       onTap: () => setState(() => _currentIndex = index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
+        width: context.w(64),
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
         margin: EdgeInsets.symmetric(horizontal: context.w(4), vertical: context.h(8)),

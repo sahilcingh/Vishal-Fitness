@@ -55,11 +55,18 @@ function normalizeYMD(s: string | null | undefined) {
 export function EditMemberModal({
   member,
   passes,
+  targetSubscriptionId,
   onClose,
   onSaved,
 }: {
   member: EditableMember | null;
   passes: Pass[];
+  // When provided, edits this exact subscription instead of guessing
+  // "whichever is active, else whichever is most recent" - required once a
+  // member can have more than one subscription in view at a time (e.g. one
+  // card per subscription on the Subscriptions page), so "Edit" always
+  // touches the record the admin actually clicked.
+  targetSubscriptionId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -70,6 +77,8 @@ export function EditMemberModal({
   const [originalPhone, setOriginalPhone] = useState("");
   const [gender, setGender] = useState("");
   const [originalGender, setOriginalGender] = useState("");
+  const [address, setAddress] = useState("");
+  const [originalAddress, setOriginalAddress] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
   const [originalTimeSlot, setOriginalTimeSlot] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
@@ -117,7 +126,7 @@ export function EditMemberModal({
       const supabase = createClient();
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, phone, gender, time_slot, photo_url")
+        .select("full_name, phone, gender, address, time_slot, photo_url")
         .eq("id", member.id)
         .maybeSingle();
       if (cancelled) return;
@@ -128,27 +137,41 @@ export function EditMemberModal({
       setOriginalPhone(profile?.phone ?? "");
       setGender(profile?.gender ?? "");
       setOriginalGender(profile?.gender ?? "");
+      setAddress(profile?.address ?? "");
+      setOriginalAddress(profile?.address ?? "");
       setTimeSlot(profile?.time_slot ?? "");
       setOriginalTimeSlot(profile?.time_slot ?? "");
       setExistingPhotoUrl(profile?.photo_url ?? null);
 
-      // Fetch fresh - prefer the active subscription, else the most recent one.
-      const { data: activeSubs } = await supabase
-        .from("subscriptions")
-        .select("id, pass_id, status, start_date, end_date")
-        .eq("user_id", member.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      let sub = activeSubs?.[0];
-      if (!sub) {
-        const { data: anySubs } = await supabase
+      // If a specific subscription was requested, load exactly that one.
+      // Otherwise fall back to the old heuristic: prefer the active
+      // subscription, else the most recent one.
+      let sub: { id: string; pass_id: string | null; status: string; start_date: string; end_date: string | null } | undefined;
+      if (targetSubscriptionId) {
+        const { data } = await supabase
+          .from("subscriptions")
+          .select("id, pass_id, status, start_date, end_date")
+          .eq("id", targetSubscriptionId)
+          .maybeSingle();
+        sub = data ?? undefined;
+      } else {
+        const { data: activeSubs } = await supabase
           .from("subscriptions")
           .select("id, pass_id, status, start_date, end_date")
           .eq("user_id", member.id)
+          .eq("status", "active")
           .order("created_at", { ascending: false })
           .limit(1);
-        sub = anySubs?.[0];
+        sub = activeSubs?.[0];
+        if (!sub) {
+          const { data: anySubs } = await supabase
+            .from("subscriptions")
+            .select("id, pass_id, status, start_date, end_date")
+            .eq("user_id", member.id)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          sub = anySubs?.[0];
+        }
       }
       if (cancelled) return;
 
@@ -187,7 +210,7 @@ export function EditMemberModal({
     return () => {
       cancelled = true;
     };
-  }, [member]);
+  }, [member, targetSubscriptionId]);
 
   if (!member) return null;
 
@@ -260,6 +283,7 @@ export function EditMemberModal({
         full_name: name.trim(),
         phone: phone.trim(),
         gender: gender || null,
+        address: address.trim() || null,
         time_slot: timeSlot.trim() || null,
       };
       if (photoUrl) profileUpdate.photo_url = photoUrl;
@@ -270,6 +294,7 @@ export function EditMemberModal({
       if (name.trim() !== originalName.trim()) changedFields.push("name");
       if (phone.trim() !== originalPhone.trim()) changedFields.push("phone");
       if ((gender || null) !== (originalGender || null)) changedFields.push("gender");
+      if ((address.trim() || null) !== (originalAddress.trim() || null)) changedFields.push("address");
       if ((timeSlot.trim() || null) !== (originalTimeSlot.trim() || null)) changedFields.push("time slot");
       if (photoUrl) changedFields.push("photo");
       if (changedFields.length > 0) {
@@ -412,6 +437,9 @@ export function EditMemberModal({
             <Dropdown label="Gender" value={gender} onChange={setGender} options={["", ...GENDERS]} optionLabel={(g) => g || "-"} />
             <div className="sm:col-span-2">
               <Field label="Time Slot" value={timeSlot} onChange={setTimeSlot} hint="e.g. 6:00 AM - 8:00 AM" />
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Address (optional)" value={address} onChange={setAddress} hint="e.g. 12 MG Road, Pune" />
             </div>
             <div className="sm:col-span-2">
               <Field label="Login Email" value={email} onChange={setEmail} hint={memberEmail || "Not found"} />
