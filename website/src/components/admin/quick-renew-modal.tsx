@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { clampInstallments } from "@/lib/installments";
 import { Modal } from "@/components/admin/modal";
+import { DateInput } from "@/components/admin/date-input";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
 type Profile = { id: string; full_name: string | null; phone: string | null };
@@ -498,18 +499,24 @@ function MiniField({
   type?: string;
   max?: string;
 }) {
+  const inputClassName =
+    "h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-brand";
   return (
     <label className="block">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <input
-        type={type ?? "text"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={hint}
-        inputMode={inputMode}
-        max={max}
-        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-brand"
-      />
+      {type === "date" ? (
+        <DateInput value={value} onChange={onChange} max={max} className={inputClassName} />
+      ) : (
+        <input
+          type={type ?? "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={hint}
+          inputMode={inputMode}
+          max={max}
+          className={inputClassName}
+        />
+      )}
     </label>
   );
 }

@@ -37,19 +37,14 @@ function BalanceTag({ amount, bold = false }: { amount: number; bold?: boolean }
   return <span className={`text-aqua ${bold ? "font-bold" : ""}`}>{formatINR(-amount)} Cr</span>;
 }
 
-// `openingDate` is the account's login-creation date, but a subscription's
-// (backdated) entry date can land earlier than that - the Opening row is
-// always rendered first, so its own date must never be later than the
-// earliest real row or the table reads out of chronological order.
-function dayKeyOf(dateStr: string) {
-  return dateStr.slice(0, 10);
-}
-
 export function MemberDetailTables({ rows, openingDate }: { rows: LedgerRow[]; openingDate: string }) {
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageItems = useMemo(() => paginate(rows, page, PAGE_SIZE), [rows, page]);
-  const effectiveOpeningDate = rows.length > 0 && dayKeyOf(rows[0].date) < dayKeyOf(openingDate) ? rows[0].date : openingDate;
+  // `rows` is already sorted oldest-first - Opening should always show
+  // whatever the earliest real ledger entry is, not the account's
+  // login-creation date (a subscription's Date can be backdated earlier).
+  const effectiveOpeningDate = rows[0]?.date ?? openingDate;
 
   const totalDebit = useMemo(() => rows.reduce((sum, r) => sum + r.debit, 0), [rows]);
   const totalCredit = useMemo(() => rows.reduce((sum, r) => sum + r.credit, 0), [rows]);

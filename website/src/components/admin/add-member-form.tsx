@@ -24,6 +24,7 @@ import { Modal } from "@/components/admin/modal";
 import { logMemberEvent } from "@/lib/member-events";
 import { MembersPickerPanel, type PickerMember } from "@/components/admin/members-picker-panel";
 import { MemberDetailTables } from "@/components/admin/member-ledger";
+import { DateInput } from "@/components/admin/date-input";
 import { buildLedgerRows } from "@/lib/member-ledger-rows";
 import { EditMemberModal } from "@/components/admin/edit-member-modal";
 
@@ -1357,6 +1358,7 @@ export function AddMemberForm({
         member={editingSubId && existingProfile ? existingProfile : null}
         passes={passes}
         targetSubscriptionId={editingSubId}
+        section="membership"
         onClose={() => setEditingSubId(null)}
         onSaved={async () => {
           if (existingProfile) await loadMemberIdentity(existingProfile);
@@ -1396,21 +1398,26 @@ function Field({
   max?: string;
   error?: string;
 }) {
+  const inputClassName = `h-11 w-full rounded-xl border bg-background px-3.5 text-[13.5px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 ${error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
+    }`;
   return (
     <label className="block">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <input
-        type={type ?? "text"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        placeholder={hint}
-        inputMode={inputMode}
-        max={max}
-        aria-invalid={!!error}
-        className={`h-11 w-full rounded-xl border bg-background px-3.5 text-[13.5px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60 ${error ? "border-danger focus:border-danger" : "border-border focus:border-brand"
-          }`}
-      />
+      {type === "date" ? (
+        <DateInput value={value} onChange={onChange} max={max} className={inputClassName} />
+      ) : (
+        <input
+          type={type ?? "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={hint}
+          inputMode={inputMode}
+          max={max}
+          aria-invalid={!!error}
+          className={inputClassName}
+        />
+      )}
       {error && <div className="mt-1 text-[11.5px] font-medium text-danger">{error}</div>}
     </label>
   );

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Receipt, Loader2, CalendarDays, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, Receipt, Loader2, X, Pencil, Trash2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Modal } from "@/components/admin/modal";
+import { DateInput } from "@/components/admin/date-input";
 import { logMemberEvent } from "@/lib/member-events";
 
 type Payment = {
@@ -60,6 +61,19 @@ export function PaymentsModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Editable locally so Total/Balance react immediately, rather than waiting
+  // on the parent to refetch and pass a new `discountAmount` prop down.
+  const [discount, setDiscount] = useState(String(discountAmount));
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset to the newly-opened subscription's real value
+    setDiscount(String(discountAmount));
+    setEditingDiscount(false);
+  }, [open, discountAmount]);
+
   useEffect(() => {
     if (!open || !subscriptionId) return;
     let cancelled = false;
@@ -90,9 +104,40 @@ export function PaymentsModal({
     };
   }, [open, subscriptionId]);
 
-  const totalFee = Math.max(passPrice - discountAmount, 0);
+  const discountNum = Math.min(Math.max(parseFloat(discount) || 0, 0), passPrice);
+  const totalFee = Math.max(passPrice - discountNum, 0);
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const balance = totalFee - totalPaid;
+
+  async function handleSaveDiscount() {
+    if (!subscriptionId) return;
+    setIsSavingDiscount(true);
+    setError(null);
+    const supabase = createClient();
+    try {
+      const { error: updateErr } = await supabase
+        .from("subscriptions")
+        .update({ discount_amount: discountNum })
+        .eq("id", subscriptionId);
+      if (updateErr) throw updateErr;
+      if (discountNum !== discountAmount) {
+        await logMemberEvent(supabase, {
+          userId,
+          subscriptionId,
+          eventType: "subscription_edit",
+          description: `Discount changed to ${formatINR(discountNum)}`,
+        });
+      }
+      setDiscount(String(discountNum));
+      setEditingDiscount(false);
+      onRecorded();
+    } catch (err) {
+      const msg = (err as { message?: string } | null)?.message;
+      setError(`Could not save the discount${msg ? `: ${msg}` : ". Please try again."}`);
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  }
 
   async function refetchPayments() {
     const supabase = createClient();
@@ -256,6 +301,53 @@ export function PaymentsModal({
         <SummaryCell label="BALANCE" value={formatINR(balance)} className={balance > 0 ? "text-energy" : "text-brand"} />
       </div>
 
+      {editingDiscount ? (
+        <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-brand/30 bg-muted p-2.5">
+          <label className="flex-1 rounded-lg border border-border bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground">Discount (₹)</div>
+            <input
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value.replace(/[^\d.]/g, ""))}
+              inputMode="decimal"
+              className="mt-0.5 w-full bg-transparent text-[13px] font-semibold outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setDiscount(String(discountAmount));
+              setEditingDiscount(false);
+            }}
+            className="rounded-lg border border-border px-3 py-2.5 text-[13px] font-semibold text-muted-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveDiscount}
+            disabled={isSavingDiscount}
+            className="flex items-center gap-1 rounded-lg bg-brand px-3 py-2.5 text-[13px] font-bold text-on-brand disabled:opacity-50"
+          >
+            {isSavingDiscount ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+            Save
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2.5 flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
+          <div className="text-[12px] text-muted-foreground">
+            Discount: <span className="font-semibold text-foreground">{formatINR(discountNum)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditingDiscount(true)}
+            className="flex items-center gap-1 text-[12px] font-semibold text-brand"
+          >
+            <Pencil className="size-3.5" />
+            Edit
+          </button>
+        </div>
+      )}
+
       {showForm && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-muted p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -282,10 +374,11 @@ export function PaymentsModal({
               </select>
             </label>
           </div>
-          <label className="mt-2.5 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-            <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-transparent text-[13px] font-semibold outline-none" />
-          </label>
+          <DateInput
+            value={date}
+            onChange={setDate}
+            className="mt-2.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-[13px] font-semibold outline-none"
+          />
           <label className="mt-2.5 block rounded-lg border border-border bg-card px-3 py-2">
             <div className="text-[10px] text-muted-foreground">Note (optional)</div>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-0.5 w-full bg-transparent text-[13px] font-medium outline-none" />

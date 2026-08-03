@@ -235,6 +235,7 @@ export function EditMemberWorkbench({ passes, members }: { passes: Pass[]; membe
         member={editModal && selected ? { id: selected.id, full_name: selected.full_name, phone: selected.phone } : null}
         passes={passes}
         targetSubscriptionId={editModal?.subId}
+        section={editModal?.subId ? "membership" : "profile"}
         onClose={() => setEditModal(null)}
         onSaved={async () => {
           if (selected) await loadDetail(selected.id);

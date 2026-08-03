@@ -446,6 +446,7 @@ export function SubscriptionsList({
         member={editingMember}
         passes={passes}
         targetSubscriptionId={editingSubId}
+        section="membership"
         onClose={() => {
           setEditingMember(null);
           setEditingSubId(null);

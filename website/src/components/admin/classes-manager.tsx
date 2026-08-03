@@ -22,6 +22,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Modal } from "@/components/admin/modal";
 import { Pagination, paginate } from "@/components/admin/pagination";
+import { DateInput } from "@/components/admin/date-input";
 import type { ClassRow } from "@/app/admin/classes/page";
 
 const PAGE_SIZE = 12;
@@ -383,12 +384,12 @@ function ClassForm({
             <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="text-[11px] text-muted-foreground">Date</div>
-              <input
-                type="date"
+              <DateInput
                 value={date}
+                onChange={setDate}
                 min={todayYMD}
                 max={maxYMD}
-                onChange={(e) => setDate(e.target.value)}
+                showIcon={false}
                 className="mt-0.5 w-full bg-transparent text-[14px] font-medium outline-none"
               />
             </div>

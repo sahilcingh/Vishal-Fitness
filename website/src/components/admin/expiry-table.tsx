@@ -282,6 +282,8 @@ export function ExpiryTable({
       <EditMemberModal
         member={editingMember}
         passes={passes}
+        targetSubscriptionId={editing?.subscriptionId}
+        section="membership"
         onClose={() => setEditing(null)}
         onSaved={() => router.refresh()}
       />

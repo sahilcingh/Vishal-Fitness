@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Modal } from "@/components/admin/modal";
+import { DateInput } from "@/components/admin/date-input";
 import { logMemberEvent } from "@/lib/member-events";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
@@ -56,6 +57,7 @@ export function EditMemberModal({
   member,
   passes,
   targetSubscriptionId,
+  section,
   onClose,
   onSaved,
 }: {
@@ -67,6 +69,12 @@ export function EditMemberModal({
   // card per subscription on the Subscriptions page), so "Edit" always
   // touches the record the admin actually clicked.
   targetSubscriptionId?: string | null;
+  // "profile" edits identity (photo/name/phone/gender/time slot/address) and
+  // touches only `profiles`. "membership" edits the subscription (pass/
+  // dates/price/discount) plus login email/password and touches only
+  // `subscriptions` - two separate concerns that used to share one dialog
+  // with no way to open just one of them.
+  section: "profile" | "membership";
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -146,6 +154,11 @@ export function EditMemberModal({
       setTimeSlot(profile?.time_slot ?? "");
       setOriginalTimeSlot(profile?.time_slot ?? "");
       setExistingPhotoUrl(profile?.photo_url ?? null);
+
+      if (section !== "membership") {
+        setLoading(false);
+        return;
+      }
 
       // If a specific subscription was requested, load exactly that one.
       // Otherwise fall back to the old heuristic: prefer the active
@@ -234,7 +247,7 @@ export function EditMemberModal({
     return () => {
       cancelled = true;
     };
-  }, [member, targetSubscriptionId]);
+  }, [member, targetSubscriptionId, section]);
 
   if (!member) return null;
 
@@ -295,45 +308,66 @@ export function EditMemberModal({
   }
 
   async function handleSave() {
-    if (!name.trim()) return setError("Name is required.");
-    if (!/^\d{10}$/.test(phone.trim())) return setError("Enter a valid 10-digit phone number.");
+    if (section === "profile") {
+      if (!name.trim()) return setError("Name is required.");
+      if (!/^\d{10}$/.test(phone.trim())) return setError("Enter a valid 10-digit phone number.");
+    }
     setError(null);
     setIsSubmitting(true);
     const supabase = createClient();
     try {
-      const photoUrl = await uploadPhotoIfAny(member!.id);
-      const photoFailed = !!photoFile && !photoUrl;
-      const profileUpdate: Record<string, unknown> = {
-        full_name: name.trim(),
-        phone: phone.trim(),
-        gender: gender || null,
-        address: address.trim() || null,
-        time_slot: timeSlot.trim() || null,
-      };
-      if (photoUrl) profileUpdate.photo_url = photoUrl;
-      const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", member!.id);
-      if (profileErr) throw profileErr;
+      if (section === "profile") {
+        const photoUrl = await uploadPhotoIfAny(member!.id);
+        const photoFailed = !!photoFile && !photoUrl;
+        const profileUpdate: Record<string, unknown> = {
+          full_name: name.trim(),
+          phone: phone.trim(),
+          gender: gender || null,
+          address: address.trim() || null,
+          time_slot: timeSlot.trim() || null,
+        };
+        if (photoUrl) profileUpdate.photo_url = photoUrl;
+        const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", member!.id);
+        if (profileErr) throw profileErr;
 
-      const changedFields: string[] = [];
-      if (name.trim() !== originalName.trim()) changedFields.push("name");
-      if (phone.trim() !== originalPhone.trim()) changedFields.push("phone");
-      if ((gender || null) !== (originalGender || null)) changedFields.push("gender");
-      if ((address.trim() || null) !== (originalAddress.trim() || null)) changedFields.push("address");
-      if ((timeSlot.trim() || null) !== (originalTimeSlot.trim() || null)) changedFields.push("time slot");
-      if (photoUrl) changedFields.push("photo");
-      if (changedFields.length > 0) {
-        await logMemberEvent(supabase, {
-          userId: member!.id,
-          eventType: "profile_edit",
-          description: `Updated ${changedFields.join(", ")}`,
-        });
+        const changedFields: string[] = [];
+        if (name.trim() !== originalName.trim()) changedFields.push("name");
+        if (phone.trim() !== originalPhone.trim()) changedFields.push("phone");
+        if ((gender || null) !== (originalGender || null)) changedFields.push("gender");
+        if ((address.trim() || null) !== (originalAddress.trim() || null)) changedFields.push("address");
+        if ((timeSlot.trim() || null) !== (originalTimeSlot.trim() || null)) changedFields.push("time slot");
+        if (photoUrl) changedFields.push("photo");
+        if (changedFields.length > 0) {
+          await logMemberEvent(supabase, {
+            userId: member!.id,
+            eventType: "profile_edit",
+            description: `Updated ${changedFields.join(", ")}`,
+          });
+        }
+
+        if (photoFailed) {
+          setError("Everything else was saved, but the photo upload failed. Try again to update just the photo.");
+          setIsSubmitting(false);
+          onSaved();
+          return;
+        }
+
+        onSaved();
+        onClose();
+        return;
       }
 
       if (passId && subscriptionId) {
         const passPriceNum = Math.max(parseFloat(passPrice) || 0, 0);
         const { error: subErr } = await supabase
           .from("subscriptions")
-          .update({ pass_id: passId, start_date: startDate, entry_date: entryDate, end_date: endDate, pass_price: passPriceNum })
+          .update({
+            pass_id: passId,
+            start_date: startDate,
+            entry_date: entryDate,
+            end_date: endDate,
+            pass_price: passPriceNum,
+          })
           .eq("id", subscriptionId);
         if (subErr) throw subErr;
 
@@ -392,13 +426,6 @@ export function EditMemberModal({
         }
       }
 
-      if (photoFailed) {
-        setError("Everything else was saved, but the photo upload failed. Try again to update just the photo.");
-        setIsSubmitting(false);
-        onSaved();
-        return;
-      }
-
       onSaved();
       onClose();
     } catch (err) {
@@ -412,7 +439,7 @@ export function EditMemberModal({
   return (
     <Modal open={!!member} onClose={onClose} maxWidthClass="max-w-[520px]">
       <div className="flex items-center justify-between">
-        <div className="text-[17px] font-bold">Edit Member</div>
+        <div className="text-[17px] font-bold">{section === "profile" ? "Edit Profile" : "Edit Membership & Login"}</div>
         <button onClick={onClose} className="text-[13px] font-semibold text-muted-foreground">
           Close
         </button>
@@ -424,139 +451,150 @@ export function EditMemberModal({
         </div>
       ) : (
         <>
-          <div className="mt-4 flex justify-center">
-            <label className="relative cursor-pointer">
-              <div className="grid size-20 place-items-center overflow-hidden rounded-full border-2 border-brand/25 bg-brand/8">
-                {photoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- blob: preview URL, next/image can't optimize it
-                  <img src={photoPreview} alt="" className="size-full object-cover" />
-                ) : existingPhotoUrl ? (
-                  <Image src={existingPhotoUrl} alt="" width={80} height={80} className="size-full object-cover" />
-                ) : (
-                  <User className="size-8 text-brand" />
-                )}
-              </div>
-              <span className="absolute bottom-0 right-0 grid size-[24px] place-items-center rounded-full border-2 border-card bg-brand">
-                <Camera className="size-3 text-white" />
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoChange}
-                aria-label="Upload member photo"
-              />
-            </label>
-          </div>
-          <p className="mt-2 text-center text-[11.5px] text-muted-foreground">Tap to add a photo (optional)</p>
-
-          <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Personal Details
-          </div>
-          <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Field label="Full Name" value={name} onChange={setName} />
-            </div>
-            <Field
-              label="Phone Number"
-              value={phone}
-              onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-              inputMode="numeric"
-            />
-            <Dropdown label="Gender" value={gender} onChange={setGender} options={["", ...GENDERS]} optionLabel={(g) => g || "-"} />
-            <div className="sm:col-span-2">
-              <Field label="Time Slot" value={timeSlot} onChange={setTimeSlot} hint="e.g. 6:00 AM - 8:00 AM" />
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Address (optional)" value={address} onChange={setAddress} hint="e.g. 12 MG Road, Pune" />
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Login Email" value={email} onChange={setEmail} hint={memberEmail || "Not found"} />
-            </div>
-          </div>
-
-          <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Membership
-          </div>
-          <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Dropdown
-                label="Pass Type"
-                value={passId}
-                onChange={(id) => {
-                  setPassId(id);
-                  // A sane default when switching to a different pass - only
-                  // while the admin hasn't already typed a price of their
-                  // own, so this never clobbers a deliberate manual edit.
-                  if (id !== originalPassId && passPrice === originalPassPrice) {
-                    const newPass = passes.find((p) => p.id === id);
-                    if (newPass) setPassPrice(String(newPass.price));
-                  }
-                }}
-                options={["", ...passes.map((p) => p.id)]}
-                optionLabel={(id) => {
-                  if (!id) return "No pass";
-                  const p = passes.find((x) => x.id === id)!;
-                  return `${p.name}  ·  ${formatINR(p.price)}  ·  ${p.duration_days} days`;
-                }}
-              />
-            </div>
-            <Field label="Date" type="date" value={entryDate} onChange={setEntryDate} />
-            <Field label="Start Date" type="date" value={startDate} onChange={setStartDate} />
-            <Field
-              label="Extra Days"
-              value={extraDays}
-              onChange={(v) => setExtraDays(v.replace(/\D/g, ""))}
-              inputMode="numeric"
-            />
-            <Field
-              label="Price (₹)"
-              value={passPrice}
-              onChange={(v) => setPassPrice(v.replace(/[^\d.]/g, ""))}
-              inputMode="decimal"
-            />
-            <div className="sm:col-span-2">
-              <InfoTile
-                label="End Date"
-                value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "-"}
-                valueClass="text-brand"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-xl border border-brand/20 bg-brand/6 p-3.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-brand">
-              <KeyRound className="size-3.5" />
-              Login Credentials
-            </div>
-            {newPassword && (
-              <div className="mt-3 flex items-center gap-3 rounded-lg border border-border/60 bg-background px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    New Password
+          {section === "profile" ? (
+            <>
+              <div className="mt-4 flex justify-center">
+                <label className="relative cursor-pointer">
+                  <div className="grid size-20 place-items-center overflow-hidden rounded-full border-2 border-brand/25 bg-brand/8">
+                    {photoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- blob: preview URL, next/image can't optimize it
+                      <img src={photoPreview} alt="" className="size-full object-cover" />
+                    ) : existingPhotoUrl ? (
+                      <Image src={existingPhotoUrl} alt="" width={80} height={80} className="size-full object-cover" />
+                    ) : (
+                      <User className="size-8 text-brand" />
+                    )}
                   </div>
-                  <div className="mt-0.5 truncate text-[13px] font-semibold">{newPassword}</div>
+                  <span className="absolute bottom-0 right-0 grid size-[24px] place-items-center rounded-full border-2 border-card bg-brand">
+                    <Camera className="size-3 text-white" />
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                    aria-label="Upload member photo"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-center text-[11.5px] text-muted-foreground">Tap to add a photo (optional)</p>
+
+              <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Personal Details
+              </div>
+              <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Field label="Full Name" value={name} onChange={setName} />
                 </div>
+                <Field
+                  label="Phone Number"
+                  value={phone}
+                  onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                />
+                <Dropdown label="Gender" value={gender} onChange={setGender} options={["", ...GENDERS]} optionLabel={(g) => g || "-"} />
+                <div className="sm:col-span-2">
+                  <Field label="Time Slot" value={timeSlot} onChange={setTimeSlot} hint="e.g. 6:00 AM - 8:00 AM" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Address (optional)" value={address} onChange={setAddress} hint="e.g. 12 MG Road, Pune" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mt-4 text-[13px] text-muted-foreground">
+                Editing <span className="font-bold text-foreground">{name || member.full_name}</span>
+                {(phone || member.phone) && <> &middot; {phone || member.phone}</>}
+              </div>
+
+              <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Membership
+              </div>
+              <div className="mt-2.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Dropdown
+                    label="Pass Type"
+                    value={passId}
+                    onChange={(id) => {
+                      setPassId(id);
+                      // A sane default when switching to a different pass -
+                      // only while the admin hasn't already typed a price of
+                      // their own, so this never clobbers a deliberate edit.
+                      if (id !== originalPassId && passPrice === originalPassPrice) {
+                        const newPass = passes.find((p) => p.id === id);
+                        if (newPass) setPassPrice(String(newPass.price));
+                      }
+                    }}
+                    options={["", ...passes.map((p) => p.id)]}
+                    optionLabel={(id) => {
+                      if (!id) return "No pass";
+                      const p = passes.find((x) => x.id === id)!;
+                      return `${p.name}  ·  ${formatINR(p.price)}  ·  ${p.duration_days} days`;
+                    }}
+                  />
+                </div>
+                <Field label="Date" type="date" value={entryDate} onChange={setEntryDate} />
+                <Field label="Start Date" type="date" value={startDate} onChange={setStartDate} />
+                <Field
+                  label="Extra Days"
+                  value={extraDays}
+                  onChange={(v) => setExtraDays(v.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                />
+                <Field
+                  label="Price (₹)"
+                  value={passPrice}
+                  onChange={(v) => setPassPrice(v.replace(/[^\d.]/g, ""))}
+                  inputMode="decimal"
+                />
+                <div className="sm:col-span-2">
+                  <InfoTile
+                    label="End Date"
+                    value={selectedPass && isValidYMD(startDate) ? prettyDate(endDate) : "-"}
+                    valueClass="text-brand"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Login Email" value={email} onChange={setEmail} hint={memberEmail || "Not found"} />
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-brand/20 bg-brand/6 p-3.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-brand">
+                  <KeyRound className="size-3.5" />
+                  Login Credentials
+                </div>
+                {newPassword && (
+                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-border/60 bg-background px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        New Password
+                      </div>
+                      <div className="mt-0.5 truncate text-[13px] font-semibold">{newPassword}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(newPassword)}
+                      className="shrink-0 text-muted-foreground"
+                      aria-label="Copy new password"
+                    >
+                      <Copy className="size-4" />
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={() => navigator.clipboard.writeText(newPassword)}
-                  className="shrink-0 text-muted-foreground"
-                  aria-label="Copy new password"
+                  onClick={handleResetPassword}
+                  disabled={isResetting}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-energy/50 py-2.5 text-[13px] font-semibold text-energy disabled:opacity-50"
                 >
-                  <Copy className="size-4" />
+                  {isResetting ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                  {isResetting ? "Resetting…" : "Reset Password & Show Credentials"}
                 </button>
               </div>
-            )}
-            <button
-              type="button"
-              onClick={handleResetPassword}
-              disabled={isResetting}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-energy/50 py-2.5 text-[13px] font-semibold text-energy disabled:opacity-50"
-            >
-              {isResetting ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-              {isResetting ? "Resetting…" : "Reset Password & Show Credentials"}
-            </button>
-          </div>
+            </>
+          )}
 
           {error && <div className="mt-4 rounded-xl bg-danger/10 px-3.5 py-3 text-[13px] text-danger">{error}</div>}
 
@@ -594,17 +632,23 @@ function Field({
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   type?: string;
 }) {
+  const inputClassName =
+    "h-11 w-full rounded-xl border border-border bg-background px-3.5 text-[13.5px] font-medium outline-none focus:border-brand placeholder:font-normal placeholder:text-muted-foreground/60";
   return (
     <label className="block">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <input
-        type={type ?? "text"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={hint}
-        inputMode={inputMode}
-        className="h-11 w-full rounded-xl border border-border bg-background px-3.5 text-[13.5px] font-medium outline-none focus:border-brand placeholder:font-normal placeholder:text-muted-foreground/60"
-      />
+      {type === "date" ? (
+        <DateInput value={value} onChange={onChange} className={inputClassName} />
+      ) : (
+        <input
+          type={type ?? "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={hint}
+          inputMode={inputMode}
+          className={inputClassName}
+        />
+      )}
     </label>
   );
 }
