@@ -14,11 +14,15 @@ import { MembersPickerPanel, type PickerMember } from "@/components/admin/member
 import { EditMemberModal } from "@/components/admin/edit-member-modal";
 import { PaymentsModal } from "@/components/admin/payments-modal";
 import { Modal } from "@/components/admin/modal";
+import { nowInIST } from "@/lib/ist-time";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
 
 function membershipNo(userId: string) {
   return `MBR-${userId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+}
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function parseYMD(s: string) {
   const [y, m, d] = s.slice(0, 10).split("-").map(Number);
@@ -29,11 +33,14 @@ function prettyDate(s: string) {
 }
 
 function statusBadge(sub: MemberSubscriptionDetail) {
-  const now = new Date();
+  // Date-only comparison against IST "today" - see add-member-form.tsx's
+  // computeMemberExistsDialog for why comparing against a real-instant
+  // `now` marks a membership expiring today as already lapsed a day early.
+  const todayYMD = toYMD(nowInIST());
   if (sub.end_date) {
-    const end = parseYMD(sub.end_date);
-    if (sub.status === "active" && end > now) {
-      const days = Math.floor((end.getTime() - now.getTime()) / 86_400_000);
+    const endYMD = sub.end_date.slice(0, 10);
+    if (sub.status === "active" && endYMD >= todayYMD) {
+      const days = Math.round((parseYMD(endYMD).getTime() - parseYMD(todayYMD).getTime()) / 86_400_000);
       return days <= 7
         ? { label: `${days}d left`, className: "bg-energy/15 text-energy" }
         : { label: "Active", className: "bg-brand/15 text-brand" };

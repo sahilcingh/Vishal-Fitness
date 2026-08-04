@@ -27,6 +27,7 @@ import { MemberDetailTables } from "@/components/admin/member-ledger";
 import { DateInput } from "@/components/admin/date-input";
 import { buildLedgerRows } from "@/lib/member-ledger-rows";
 import { EditMemberModal } from "@/components/admin/edit-member-modal";
+import { nowInIST } from "@/lib/ist-time";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
 type Profile = { id: string; full_name: string | null; phone: string | null };
@@ -222,7 +223,7 @@ export function AddMemberForm({
   // subscription's own price/discount, minus whatever it's already collected).
   const effectivePriceBasis = addingNewMembership
     ? Math.max(passPrice - discountAmount, 0)
-    : Math.max((targetExistingSub?.gym_passes?.price ?? 0) - (targetExistingSub?.discount_amount ?? 0), 0);
+    : Math.max((targetExistingSub?.pass_price ?? 0) - (targetExistingSub?.discount_amount ?? 0), 0);
   const alreadyPaidBasis = addingNewMembership
     ? 0
     : ledgerPayments.filter((p) => p.subscription_id === targetExistingSub?.id).reduce((sum, p) => sum + (p.amount ?? 0), 0);
@@ -307,19 +308,22 @@ export function AddMemberForm({
   }
 
   function computeMemberExistsDialog(subs: MemberSubscription[]) {
-    const now = new Date();
+    // Date-only comparison against IST "today" - comparing a date-only
+    // end_date's midnight against a real instant `now` would mark a
+    // membership expiring today as already lapsed as soon as local midnight
+    // passes, a full day before it actually does.
+    const todayYMD = toYMD(nowInIST());
+    const today = parseYMD(todayYMD);
     let hasActive = false;
     let latestEnd: Date | null = null;
     for (const sub of subs) {
-      if (sub.status === "active" && sub.end_date) {
+      if (sub.status === "active" && sub.end_date && sub.end_date.slice(0, 10) >= todayYMD) {
         const end = parseYMD(sub.end_date.slice(0, 10));
-        if (end > now) {
-          hasActive = true;
-          if (!latestEnd || end > latestEnd) latestEnd = end;
-        }
+        hasActive = true;
+        if (!latestEnd || end > latestEnd) latestEnd = end;
       }
     }
-    const daysLeft = latestEnd ? Math.floor((latestEnd.getTime() - now.getTime()) / 86_400_000) : 0;
+    const daysLeft = latestEnd ? Math.round((latestEnd.getTime() - today.getTime()) / 86_400_000) : 0;
 
     if (subs.length === 0) {
       return { actionLabel: "Add First Pass", tone: "brand" as const, message: "No membership history found. Add their first pass below.", suggestedStart: null };
@@ -534,6 +538,9 @@ export function AddMemberForm({
           address: address.trim() || null,
           pass_id: selectedPass!.id,
           start_date: startDate,
+          entry_date: entryDate,
+          discount_amount: discountAmount > 0 ? discountAmount : 0,
+          extra_days: extraDaysNum > 0 ? extraDaysNum : 0,
         },
       });
 
@@ -573,19 +580,10 @@ export function AddMemberForm({
         .limit(1)
         .single();
 
-      // entry_date/pass_price always need setting (create-member doesn't
-      // know about either yet, so neither is in the initial insert) - always
-      // included, unlike discount/end_date which only patch when the admin
-      // actually set them.
-      const subPatch: Record<string, unknown> = { entry_date: entryDate, pass_price: selectedPass!.price };
-      if (discountAmount > 0) subPatch.discount_amount = discountAmount;
-      if (extraDaysNum > 0) subPatch.end_date = endDate;
-      let patchFailed = false;
-      if (Object.keys(subPatch).length > 0 && latestSub) {
-        const { error: patchErr } = await supabase.from("subscriptions").update(subPatch).eq("id", latestSub.id);
-        patchFailed = !!patchErr;
-      }
-
+      // entry_date/pass_price/discount_amount/end_date(extra days) are all
+      // set atomically by create-member's own subscription insert now - no
+      // separate patch call, so there's no window where the subscription
+      // could be left with a missing pass_price if a second write failed.
       let paymentFailed = false;
       const paymentRows = safeInstallments
         .filter((r) => r.safeAmount > 0)
@@ -609,12 +607,11 @@ export function AddMemberForm({
       if (photoUrl) profileUpdate.photo_url = photoUrl;
       const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", userId);
 
-      if (paymentFailed || profileErr || photoFailed || patchFailed) {
+      if (paymentFailed || profileErr || photoFailed) {
         // The member account itself was created successfully - don't lose
         // those credentials - but be explicit about what still needs manual
         // follow-up rather than silently showing a false success.
         const issues = [
-          patchFailed && "applying the discount/extra-days adjustment failed - redo it manually from the Subscriptions page",
           paymentFailed && `recording the ${formatINR(newPaidTotal)} payment failed - add it manually from the Subscriptions page`,
           profileErr && "saving the time slot/forced-password-reset flag failed - edit the member to retry",
           !profileErr && photoFailed && "the photo upload failed - edit the member to retry",

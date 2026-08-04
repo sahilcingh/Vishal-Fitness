@@ -20,6 +20,7 @@ export default async function MembersLedgerPage() {
       .from("profiles")
       .select("id, full_name, phone, photo_url, created_at")
       .neq("role", "admin")
+      .is("archived_at", null)
       .order("full_name", { ascending: true })
       .returns<Omit<MemberRow, "balance">[]>(),
     supabase.from("subscriptions").select("user_id, discount_amount, pass_price").returns<SubBalanceRow[]>(),

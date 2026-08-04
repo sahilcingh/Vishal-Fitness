@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, ChevronRight, UserRound } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { Pagination, paginate } from "@/components/admin/pagination";
+import { nowInIST } from "@/lib/ist-time";
 
 const ROW_GAP_PX = 4; // matches the list's gap-1
 const FALLBACK_ROW_HEIGHT_PX = 56; // size-9 avatar + py-2.5, used before the first row mounts
@@ -57,10 +58,18 @@ function membershipNo(userId: string) {
   return `MBR-${userId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
 
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function statusChip(member: PickerMember) {
   const sub = member.subscriptions[0];
   if (!sub) return { label: "New", className: "bg-muted text-muted-foreground" };
-  const isActive = sub.status === "active" && new Date(sub.end_date) > new Date();
+  // Date-only comparison against IST "today" - a naive `new Date(end_date)
+  // > new Date()` reads a "YYYY-MM-DD" end_date as UTC midnight and compares
+  // it to a real instant, which can mark a still-valid membership "Expired"
+  // hours before it actually lapses.
+  const isActive = sub.status === "active" && sub.end_date.slice(0, 10) >= toYMD(nowInIST());
   return isActive
     ? { label: sub.pass?.name ?? "Active", className: "bg-brand/12 text-brand" }
     : { label: "Expired", className: "bg-energy/10 text-energy" };

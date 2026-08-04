@@ -37,8 +37,6 @@ export default async function SubscriptionsPage() {
     paid: paidMap.get(s.id) ?? 0,
   }));
 
-  const nowMs = new Date().getTime();
-
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
@@ -48,7 +46,7 @@ export default async function SubscriptionsPage() {
         <h1 className="font-display text-[26px] font-bold leading-none">Subscriptions</h1>
       </div>
 
-      <SubscriptionsList subscriptions={subscriptions} passes={passesRes.data ?? []} nowMs={nowMs} />
+      <SubscriptionsList subscriptions={subscriptions} passes={passesRes.data ?? []} />
     </div>
   );
 }

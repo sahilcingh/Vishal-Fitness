@@ -8,6 +8,7 @@ import { formatINR } from "@/lib/format";
 import { clampInstallments } from "@/lib/installments";
 import { Modal } from "@/components/admin/modal";
 import { DateInput } from "@/components/admin/date-input";
+import { nowInIST } from "@/lib/ist-time";
 
 type Pass = { id: string; name: string; price: number; duration_days: number };
 type Profile = { id: string; full_name: string | null; phone: string | null };
@@ -55,19 +56,22 @@ function prettyDate(s: string) {
 // actionLabel/tone - the action here is always "Update Membership", so only
 // the descriptive status line is needed.
 function statusMessage(subs: SubHistoryRow[]): string {
-  const now = new Date();
+  // Date-only comparison against IST "today" - see add-member-form.tsx's
+  // computeMemberExistsDialog for why comparing a date-only end_date against
+  // a real-instant `now` marks a membership expiring today as already
+  // lapsed a full day early.
+  const todayYMD = toYMD(nowInIST());
+  const today = parseYMD(todayYMD);
   let hasActive = false;
   let latestEnd: Date | null = null;
   for (const sub of subs) {
-    if (sub.status === "active" && sub.end_date) {
+    if (sub.status === "active" && sub.end_date && sub.end_date.slice(0, 10) >= todayYMD) {
       const end = parseYMD(sub.end_date);
-      if (end > now) {
-        hasActive = true;
-        if (!latestEnd || end > latestEnd) latestEnd = end;
-      }
+      hasActive = true;
+      if (!latestEnd || end > latestEnd) latestEnd = end;
     }
   }
-  const daysLeft = latestEnd ? Math.floor((latestEnd.getTime() - now.getTime()) / 86_400_000) : 0;
+  const daysLeft = latestEnd ? Math.round((latestEnd.getTime() - today.getTime()) / 86_400_000) : 0;
 
   if (subs.length === 0) return "No membership history found - add their first pass below.";
   if (!hasActive) return "All previous memberships have expired - re-enroll them below.";

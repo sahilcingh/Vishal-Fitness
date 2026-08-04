@@ -37,7 +37,7 @@ type SubRow = {
   start_date: string | null;
   end_date: string | null;
   pass_price: number | null;
-  profiles: { full_name: string | null; phone: string | null } | null;
+  profiles: { full_name: string | null; phone: string | null; archived_at: string | null } | null;
   gym_passes: { name: string | null } | null;
 };
 
@@ -89,7 +89,7 @@ export default async function ExpiryPage({
         .from("subscriptions")
         .select(
           `id, user_id, start_date, end_date, pass_price,
-           profiles:user_id ( full_name, phone ),
+           profiles:user_id ( full_name, phone, archived_at ),
            gym_passes:pass_id ( name )`,
         )
         .order("end_date", { ascending: true })
@@ -109,6 +109,7 @@ export default async function ExpiryPage({
   // Dart screen assumes end_date is always present).
   const rows: ExpiryRow[] = subs
     .map((s): ExpiryRow | null => {
+      if (s.profiles?.archived_at) return null;
       const endYMD = normalizeYMD(s.end_date);
       if (!endYMD) return null;
       const startYMD = normalizeYMD(s.start_date);

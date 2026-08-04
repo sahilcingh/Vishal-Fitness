@@ -22,6 +22,31 @@ async function rollbackAuthUser(supabase: ReturnType<typeof createClient>, userI
   return null
 }
 
+// This function creates auth accounts and writes member records with the
+// service-role key, so it must independently verify the caller is an actual
+// logged-in admin - the platform's default JWT check only proves the caller
+// has *some* valid token (the public anon key qualifies), not that they're
+// authorized to do this.
+async function requireAdmin(req: Request, supabase: ReturnType<typeof createClient>): Promise<Response | null> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization token' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser(token)
+  if (userError || !userData?.user) {
+    return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single()
+  if (profileError || profile?.role !== 'admin') {
+    return new Response(JSON.stringify({ error: 'Admin privileges required' }), { status: 403, headers: corsHeaders })
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -36,21 +61,52 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { name, phone, email, gender, address, pass_id, start_date } = await req.json()
+    const { name, phone, email, gender, address, pass_id, start_date, entry_date, discount_amount, extra_days } =
+      await req.json()
 
-    if (!name || !phone || !pass_id || !start_date) {
+    if (!name || !String(name).trim() || !phone || !String(phone).trim() || !pass_id || !start_date) {
       return new Response(
         JSON.stringify({ error: 'name, phone, pass_id and start_date are required' }),
         { status: 400, headers: corsHeaders },
       )
     }
+    if (Number.isNaN(new Date(start_date).getTime())) {
+      return new Response(JSON.stringify({ error: 'start_date is not a valid date' }), {
+        status: 400,
+        headers: corsHeaders,
+      })
+    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Fetch pass to compute end_date
+    const adminCheck = await requireAdmin(req, supabase)
+    if (adminCheck) return adminCheck
+
+    // Server-side duplicate-phone check - the admin UI already does this via
+    // a blur handler + pre-submit re-check, but that's client-side only and
+    // has a real bypass (supplying any custom, non-blank email for a phone
+    // that already has an account skips the UI's only duplicate signal).
+    // This is the actual create path, so it's the only place that can catch
+    // every case regardless of what the client sent.
+    const { data: existingByPhone } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('phone', (phone as string).trim())
+      .maybeSingle()
+    if (existingByPhone) {
+      return new Response(JSON.stringify({ error: 'This phone number is already registered.' }), {
+        status: 409,
+        headers: corsHeaders,
+      })
+    }
+
+    // Fetch pass to compute end_date and to snapshot pass_price atomically
+    // with the subscription insert below - price and duration must never be
+    // read live again after this point (a later price change on gym_passes
+    // must not retroactively affect this member's charge).
     const { data: pass, error: passError } = await supabase
       .from('gym_passes')
-      .select('duration_days')
+      .select('price, duration_days')
       .eq('id', pass_id)
       .single()
 
@@ -63,7 +119,7 @@ Deno.serve(async (req) => {
 
     const start = new Date(start_date)
     const end = new Date(start)
-    end.setDate(end.getDate() + (pass.duration_days as number))
+    end.setDate(end.getDate() + (pass.duration_days as number) + (Number(extra_days) > 0 ? Number(extra_days) : 0))
     const end_date = end.toISOString().substring(0, 10)
 
     // Use provided email or generate a placeholder
@@ -113,13 +169,19 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders })
     }
 
-    // Insert subscription
+    // Insert subscription - pass_price is snapshotted from `pass.price` right
+    // now, in the same insert as everything else, so there is no window
+    // where this row could be left with pass_price = NULL (which would
+    // silently zero this member's charge in every ledger/report forever).
     const { error: subError } = await supabase.from('subscriptions').insert({
       user_id: userId,
       pass_id,
       status: 'active',
       start_date,
       end_date,
+      entry_date: entry_date || start_date,
+      pass_price: pass.price,
+      discount_amount: Number(discount_amount) > 0 ? Number(discount_amount) : 0,
     })
 
     if (subError) {

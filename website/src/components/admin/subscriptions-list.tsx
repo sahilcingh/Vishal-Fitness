@@ -20,6 +20,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
 import { initials } from "@/lib/utils";
+import { nowInIST } from "@/lib/ist-time";
 import { Modal } from "@/components/admin/modal";
 import { EditMemberModal, type EditableMember } from "@/components/admin/edit-member-modal";
 import { PaymentsModal } from "@/components/admin/payments-modal";
@@ -47,22 +48,36 @@ type Pass = { id: string; name: string; price: number; duration_days: number };
 function membershipNo(userId: string) {
   return `MBR-${userId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function parseYMD(s: string) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function normalizeYMD(s: string | null | undefined) {
+  if (!s) return "";
+  const sliced = s.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(sliced) ? sliced : "";
+}
+// Explicit y/m/d parse, not `new Date(s)` - the latter reads "YYYY-MM-DD" as
+// UTC midnight, which a browser east of UTC can then render as the next day.
 function prettyDate(s: string) {
-  return new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const ymd = normalizeYMD(s);
+  return ymd ? parseYMD(ymd).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
 }
 
 export function SubscriptionsList({
   subscriptions,
   passes,
-  nowMs,
 }: {
   subscriptions: SubscriptionRow[];
   passes: Pass[];
-  nowMs: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const todayYMD = toYMD(nowInIST());
 
   // Search + pass-type filter + page live in the URL, not just component
   // state - otherwise navigating to a member's Ledger and clicking Back
@@ -251,8 +266,11 @@ export function SubscriptionsList({
             const isExpanded = expanded.has(sub.id);
             const profile = sub.profiles;
             const pass = sub.gym_passes;
-            const endDate = new Date(sub.end_date);
-            const daysLeft = Math.floor((endDate.getTime() - nowMs) / 86_400_000);
+            // Date-only comparison against IST "today" - matches the Expiry
+            // Alerts page's convention exactly, so the two screens never
+            // disagree about whether a membership has actually expired.
+            const endYMD = normalizeYMD(sub.end_date);
+            const daysLeft = endYMD ? Math.round((parseYMD(endYMD).getTime() - parseYMD(todayYMD).getTime()) / 86_400_000) : 0;
             const isExpired = daysLeft < 0 || sub.status === "expired";
             const totalFee = sub.pass_price ?? 0;
             const discountAmount = sub.discount_amount ?? 0;

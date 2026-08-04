@@ -359,6 +359,30 @@ export function EditMemberModal({
 
       if (passId && subscriptionId) {
         const passPriceNum = Math.max(parseFloat(passPrice) || 0, 0);
+        const priceChangedCheck = passPriceNum !== Math.max(parseFloat(originalPassPrice) || 0, 0);
+        if (priceChangedCheck) {
+          // Changing the price after payments already exist against this
+          // subscription silently rewrites the member's balance (e.g. a
+          // fully-paid ₹5,000 subscription dropped to ₹3,000 shows as ₹2,000
+          // "credit" everywhere, with no refund having happened) - the admin
+          // needs to see that consequence spelled out before it's silent.
+          const { count } = await supabase
+            .from("payments")
+            .select("id", { count: "exact", head: true })
+            .eq("subscription_id", subscriptionId);
+          if (
+            count &&
+            count > 0 &&
+            !window.confirm(
+              `This subscription already has ${count} payment${count === 1 ? "" : "s"} recorded against it. ` +
+                `Changing the price to ${formatINR(passPriceNum)} will immediately change this member's balance ` +
+                `everywhere (ledger, Trial Balance, Payments) even though nothing was actually refunded or re-billed. Continue?`,
+            )
+          ) {
+            setIsSubmitting(false);
+            return;
+          }
+        }
         const { error: subErr } = await supabase
           .from("subscriptions")
           .update({

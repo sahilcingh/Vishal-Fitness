@@ -8,6 +8,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// This function can reset any user's password or change their login email
+// with the service-role key, so it must independently verify the caller is
+// an actual logged-in admin - the platform's default JWT check only proves
+// the caller has *some* valid token (the public anon key qualifies), not
+// that they're authorized to do this. Without this check, anyone with the
+// public anon key could take over any account, admin included.
+async function requireAdmin(req: Request, supabase: ReturnType<typeof createClient>): Promise<Response | null> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization token' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser(token)
+  if (userError || !userData?.user) {
+    return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single()
+  if (profileError || profile?.role !== 'admin') {
+    return new Response(JSON.stringify({ error: 'Admin privileges required' }), { status: 403, headers: corsHeaders })
+  }
+  return null
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -33,8 +61,17 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    const adminCheck = await requireAdmin(req, supabase)
+    if (adminCheck) return adminCheck
+
     // Email-change mode: admin-initiated, skips OTP entirely via email_confirm.
     if (new_email) {
+      if (!EMAIL_RE.test(new_email)) {
+        return new Response(JSON.stringify({ error: 'new_email is not a valid email address' }), {
+          status: 400,
+          headers: corsHeaders,
+        })
+      }
       const { error: emailError } = await supabase.auth.admin.updateUserById(user_id, {
         email: new_email,
         email_confirm: true,

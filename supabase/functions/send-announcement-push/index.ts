@@ -3,6 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')!
+// Unlike the other 3 functions, this one is meant to be called ONLY by the
+// Supabase Database Webhook on `announcements` inserts, never by a logged-in
+// user - there's no end-user session to check here. Instead it checks a
+// shared secret, which must also be set as a custom "Authorization: Bearer
+// <secret>" header on the Database Webhook config in the dashboard.
+// Deliberately optional (only enforced once ANNOUNCEMENT_WEBHOOK_SECRET is
+// set) so this doesn't break the currently-working webhook until that
+// header is configured to match.
+const webhookSecret = Deno.env.get('ANNOUNCEMENT_WEBHOOK_SECRET')
 
 // ─── Firebase HTTP v1 auth helpers ────────────────────────────────────────────
 
@@ -72,6 +81,10 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
 
 Deno.serve(async (req) => {
   try {
+    if (webhookSecret && req.headers.get('Authorization') !== `Bearer ${webhookSecret}`) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    }
+
     const body = await req.json()
     // Supabase webhook sends { type, table, record, old_record }
     const record = body.record as Record<string, unknown>

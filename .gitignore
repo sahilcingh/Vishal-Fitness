@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .vercel
+
+# Local Supabase backups (real member data + photos) - never commit these.
+/db_backup/

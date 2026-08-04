@@ -25,6 +25,7 @@ export default async function AddMemberPage({
       .from("profiles")
       .select("id, full_name, phone, subscriptions(end_date, status, pass:gym_passes(name))")
       .neq("role", "admin")
+      .is("archived_at", null)
       .order("full_name", { ascending: true })
       .order("created_at", { ascending: false, foreignTable: "subscriptions" })
       .limit(1, { foreignTable: "subscriptions" })

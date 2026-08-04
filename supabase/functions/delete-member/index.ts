@@ -8,6 +8,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// This function permanently deletes a member's entire record with the
+// service-role key, so it must independently verify the caller is an actual
+// logged-in admin - the platform's default JWT check only proves the caller
+// has *some* valid token (the public anon key qualifies), not that they're
+// authorized to do this.
+async function requireAdmin(req: Request, supabase: ReturnType<typeof createClient>): Promise<Response | null> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization token' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser(token)
+  if (userError || !userData?.user) {
+    return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { status: 401, headers: corsHeaders })
+  }
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single()
+  if (profileError || profile?.role !== 'admin') {
+    return new Response(JSON.stringify({ error: 'Admin privileges required' }), { status: 403, headers: corsHeaders })
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -33,48 +58,32 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // A true, permanent delete - every trace of this member. Cleared
-    // explicitly table-by-table (child tables first) rather than relying on
-    // whatever foreign-key cascade behavior may or may not be configured -
-    // this way the result is the same regardless. Order matters: payments
-    // and member_events reference subscriptions, so they're cleared first.
-    const tablesToClear = ['member_events', 'payments', 'check_ins', 'subscriptions']
-    for (const table of tablesToClear) {
-      const { error } = await supabase.from(table).delete().eq('user_id', user_id)
-      if (error) {
-        return new Response(
-          JSON.stringify({ error: `Failed clearing ${table}: ${error.message}. Nothing further was deleted.` }),
-          { status: 500, headers: corsHeaders },
-        )
-      }
-    }
+    const adminCheck = await requireAdmin(req, supabase)
+    if (adminCheck) return adminCheck
 
-    // Best-effort: remove their uploaded photo too. Doesn't block the rest
-    // of the deletion if this fails - a leftover file in storage is a much
-    // smaller problem than stopping a delete the admin already confirmed.
-    try {
-      const { data: files } = await supabase.storage.from('member-photos').list(user_id)
-      if (files && files.length > 0) {
-        await supabase.storage.from('member-photos').remove(files.map((f) => `${user_id}/${f.name}`))
-      }
-    } catch (storageErr) {
-      console.error('delete-member: storage cleanup failed (continuing):', storageErr)
-    }
-
-    const { error: profileError } = await supabase.from('profiles').delete().eq('id', user_id)
+    // Soft delete only: archive the profile and revoke login. Their
+    // subscriptions/payments/check_ins/member_events are deliberately left
+    // untouched - hard-deleting them would retroactively change past
+    // Daily Revenue/Overview totals for whatever months their payments
+    // fell in, which is exactly what `archived_at` exists to avoid.
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', user_id)
     if (profileError) {
       return new Response(
-        JSON.stringify({ error: `Their history was cleared, but deleting the profile failed (${profileError.message}) - the login account was NOT removed either.` }),
+        JSON.stringify({ error: `Failed to archive the member: ${profileError.message}. Nothing was changed.` }),
         { status: 500, headers: corsHeaders },
       )
     }
 
-    // Auth account last - once nothing else references it.
-    const { error: authError } = await supabase.auth.admin.deleteUser(user_id)
+    // Revoke login without deleting the auth account, so their id keeps
+    // pointing at real history instead of becoming an orphaned reference.
+    const { error: authError } = await supabase.auth.admin.updateUserById(user_id, { ban_duration: '876000h' })
     if (authError) {
       return new Response(
         JSON.stringify({
-          error: `Their profile and history were deleted, but removing the login account failed (${authError.message}) - auth user ${user_id} must be deleted manually from Supabase Authentication.`,
+          error: `The member was archived, but revoking their login failed (${authError.message}) - they may still be able to sign in.`,
         }),
         { status: 500, headers: corsHeaders },
       )

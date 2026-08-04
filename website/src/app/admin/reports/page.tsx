@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, CalendarRange, IndianRupee, UserCheck, UserSearch, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { nowInIST } from "@/lib/ist-time";
+import { nowInIST, istDayKey } from "@/lib/ist-time";
 import { ReportCard, type ReportColumn, type ReportRow } from "@/components/admin/report-card";
 import { CountUp } from "@/components/count-up";
 
@@ -61,15 +61,19 @@ function fmtDMY(s: string | null | undefined) {
   const [y, m, d] = ymd.split("-");
   return `${d}/${m}/${y}`;
 }
+// Formats explicitly in IST rather than reading the server's local getters
+// (.getHours()/.getMinutes()) - Vercel defaults to UTC, which would show
+// every check-in time ~5.5 hours behind when the gym actually checked in.
 function fmtTime(s: string | null | undefined) {
   if (!s) return "";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "";
-  let h = d.getHours();
-  const m = d.getMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${pad2(h)}:${pad2(m)} ${ampm}`;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
 }
 function daysDiffTrunc(a: Date, b: Date) {
   return Math.trunc((a.getTime() - b.getTime()) / 86_400_000);
@@ -99,6 +103,7 @@ type SubExpiredRow = {
   gym_passes: PassRef | null;
 };
 type SubMonthCreatedRow = {
+  id: string;
   entry_date: string;
   end_date: string;
   pass_price: number | null;
@@ -106,6 +111,7 @@ type SubMonthCreatedRow = {
   gym_passes: PassRef | null;
 };
 type SubTodayCreatedRow = {
+  id: string;
   entry_date: string;
   pass_price: number | null;
   profiles: ProfileRef | null;
@@ -191,7 +197,7 @@ export default async function ReportsPage() {
       safeSelect<SubMonthCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("entry_date, end_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("id, entry_date, end_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .gte("entry_date", monthStartYMD)
           .order("entry_date", { ascending: false })
           .returns<SubMonthCreatedRow[]>(),
@@ -199,7 +205,7 @@ export default async function ReportsPage() {
       safeSelect<SubTodayCreatedRow>(
         supabase
           .from("subscriptions")
-          .select("entry_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
+          .select("id, entry_date, pass_price, profiles:user_id(full_name, phone), gym_passes:pass_id(name, price)")
           .eq("entry_date", todayYMD)
           .order("entry_date")
           .returns<SubTodayCreatedRow[]>(),
@@ -350,21 +356,17 @@ export default async function ReportsPage() {
     v.total.toFixed(0),
   ]);
 
+  // "New Sub" and "Installments" must both be actual CASH RECEIVED
+  // (payments.amount), split by whether the payment's subscription was
+  // also created in this same period - never a subscription's billed
+  // pass_price added on top, or a same-day signup that's paid in full would
+  // get counted twice (once as the bill, once as the payment). A brand-new
+  // signup that hasn't paid anything yet contributes 0 here, same as the
+  // "Actual Monthly Collections" table below - this is a collections
+  // report, not an admissions report (see subsMonthCreated for that).
   type UserCollection = { name: string; phone: string; passType: string; newSub: number; installments: number };
-  function buildCollection(subs: SubTodayCreatedRow[] | SubMonthCreatedRow[], payments: PaymentRow[]) {
+  function buildCollection(newSubIds: Set<string>, payments: PaymentRow[]) {
     const grouped = new Map<string, UserCollection>();
-    for (const r of subs) {
-      const phone = r.profiles?.phone ?? "";
-      const entry = grouped.get(phone) ?? {
-        name: r.profiles?.full_name ?? "",
-        phone,
-        passType: r.gym_passes?.name ?? "",
-        newSub: 0,
-        installments: 0,
-      };
-      entry.newSub += r.pass_price ?? 0;
-      grouped.set(phone, entry);
-    }
     for (const p of payments) {
       const sub = p.subscriptions;
       const phone = sub?.profiles?.phone ?? "";
@@ -375,7 +377,11 @@ export default async function ReportsPage() {
         newSub: 0,
         installments: 0,
       };
-      entry.installments += p.amount ?? 0;
+      if (p.subscription_id && newSubIds.has(p.subscription_id)) {
+        entry.newSub += p.amount ?? 0;
+      } else {
+        entry.installments += p.amount ?? 0;
+      }
       grouped.set(phone, entry);
     }
     return Array.from(grouped.values());
@@ -384,7 +390,7 @@ export default async function ReportsPage() {
   const paymentsToday = paymentsAll.filter((p) => normalizeYMD(p.payment_date) === todayYMD);
   const paymentsThisMonth = paymentsAll.filter((p) => normalizeYMD(p.payment_date) >= monthStartYMD);
 
-  const dailyCollectionGroups = buildCollection(subsTodayCreated, paymentsToday);
+  const dailyCollectionGroups = buildCollection(new Set(subsTodayCreated.map((s) => s.id)), paymentsToday);
   const dailyCollectionGrand = dailyCollectionGroups.reduce((sum, u) => sum + u.newSub + u.installments, 0);
   const dailyCollectionRows: ReportRow[] = dailyCollectionGroups.map((u) => [
     u.name,
@@ -395,7 +401,7 @@ export default async function ReportsPage() {
     (u.newSub + u.installments).toFixed(0),
   ]);
 
-  const monthlyCollectionGroups = buildCollection(subsMonthCreated, paymentsThisMonth);
+  const monthlyCollectionGroups = buildCollection(new Set(subsMonthCreated.map((s) => s.id)), paymentsThisMonth);
   const monthlyCollectionGrand = monthlyCollectionGroups.reduce((sum, u) => sum + u.newSub + u.installments, 0);
   const monthlyCollectionRows: ReportRow[] = monthlyCollectionGroups.map((u) => [
     u.name,
@@ -460,13 +466,17 @@ export default async function ReportsPage() {
   // 3. ATTENDANCE REPORTS
   // ────────────────────────────────────────────────────────────
 
+  // checked_in_at is a timestamptz - normalizeYMD's plain UTC slice would
+  // bucket a ~12am-5:29am IST check-in onto the previous IST day. istDayKey
+  // reads it in the gym's actual timezone instead, matching how
+  // member/today's/pass's own check-in-today detection already works.
   const dailyAttendanceRows: ReportRow[] = checkInsAll
-    .filter((c) => normalizeYMD(c.checked_in_at) === todayYMD)
+    .filter((c) => istDayKey(c.checked_in_at) === todayYMD)
     .map((c) => [c.profiles?.full_name ?? "", c.profiles?.phone ?? "", fmtTime(c.checked_in_at)]);
 
   const monthlyAttendanceRows: ReportRow[] = checkInsAll
-    .filter((c) => normalizeYMD(c.checked_in_at) >= monthStartYMD)
-    .map((c) => [c.profiles?.full_name ?? "", c.profiles?.phone ?? "", fmtDMY(c.checked_in_at), fmtTime(c.checked_in_at)]);
+    .filter((c) => istDayKey(c.checked_in_at) >= monthStartYMD)
+    .map((c) => [c.profiles?.full_name ?? "", c.profiles?.phone ?? "", fmtDMY(istDayKey(c.checked_in_at)), fmtTime(c.checked_in_at)]);
 
   type VisitData = { name: string; phone: string; count: number; last: string };
   const visitMap = new Map<string, VisitData>();
@@ -479,7 +489,7 @@ export default async function ReportsPage() {
   }
   const visitFrequencyRows: ReportRow[] = Array.from(visitMap.values())
     .sort((a, b) => b.count - a.count)
-    .map((v) => [v.name, v.phone, v.count.toString(), fmtDMY(v.last)]);
+    .map((v) => [v.name, v.phone, v.count.toString(), v.last ? fmtDMY(istDayKey(v.last)) : ""]);
 
   // ────────────────────────────────────────────────────────────
   // Snapshot stats

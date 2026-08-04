@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Receipt, Loader2, X, Pencil, Trash2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatINR } from "@/lib/format";
@@ -58,6 +58,10 @@ export function PaymentsModal({
   const [date, setDate] = useState(toYMD(new Date()));
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // A ref, not just the isSaving state - state only disables the button
+  // after a re-render commits, which a fast double-click can race past.
+  // This check is synchronous, so the second call is rejected immediately.
+  const isSavingRef = useRef(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -175,6 +179,7 @@ export function PaymentsModal({
   }
 
   async function handleSubmitForm() {
+    if (isSavingRef.current) return;
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) {
       setError("Please enter a payment amount greater than ₹0.");
@@ -189,6 +194,7 @@ export function PaymentsModal({
       return;
     }
     setError(null);
+    isSavingRef.current = true;
     setIsSaving(true);
     const supabase = createClient();
     // Re-clamped immediately before the write as a last line of defense -
@@ -233,6 +239,7 @@ export function PaymentsModal({
       const msg = (err as { message?: string } | null)?.message;
       setError(`Could not ${editingId ? "update" : "record"} the payment${msg ? `: ${msg}` : ". Please try again."}`);
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }
