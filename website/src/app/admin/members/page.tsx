@@ -26,18 +26,20 @@ export default async function MembersLedgerPage() {
     supabase.from("payments").select("user_id, amount").returns<PaymentBalanceRow[]>(),
   ]);
 
-  // Same Debit (charge) / Credit (payment) math as the individual member
-  // ledger, aggregated per member so the directory can show at a glance who
-  // still owes money vs. who's overpaid. Debit and Credit are tracked as
-  // independent running totals (not netted against each other) so the
-  // directory can show both side by side, same as a real trial balance.
+  // Same Debit (charge) / Credit (discount + payment) convention as the
+  // individual member's own ledger (member-ledger-rows.ts): a subscription's
+  // full pass_price is the Debit, and any discount is its own Credit-side
+  // line rather than being netted into the Debit - otherwise this directory's
+  // gross totals wouldn't reconcile with a member's own "Closing Balance" row.
   const debitByUser = new Map<string, number>();
   const creditByUser = new Map<string, number>();
   for (const s of subsRes.data ?? []) {
     const fee = s.pass_price ?? 0;
     const discount = s.discount_amount ?? 0;
-    const netPayable = Math.max(fee - discount, 0);
-    debitByUser.set(s.user_id, (debitByUser.get(s.user_id) ?? 0) + netPayable);
+    debitByUser.set(s.user_id, (debitByUser.get(s.user_id) ?? 0) + fee);
+    if (discount > 0) {
+      creditByUser.set(s.user_id, (creditByUser.get(s.user_id) ?? 0) + discount);
+    }
   }
   for (const p of paymentsRes.data ?? []) {
     creditByUser.set(p.user_id, (creditByUser.get(p.user_id) ?? 0) + (p.amount ?? 0));

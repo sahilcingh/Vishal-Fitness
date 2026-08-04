@@ -132,15 +132,17 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
   const currentPage = Math.min(Math.max(page, 1), totalPages);
   const serialOffset = (currentPage - 1) * PAGE_SIZE;
 
-  // Grand total for just the members shown on this page, not the whole
-  // filtered list - each page foots its own Debit/Credit/Balance.
-  const pageTotals = useMemo(
+  const isLastPage = currentPage === totalPages;
+
+  // Grand total across every filtered member, not just this page - only
+  // shown once, at the bottom of the last page.
+  const grandTotals = useMemo(
     () =>
-      pageItems.reduce(
+      filtered.reduce(
         (acc, m) => ({ debit: acc.debit + m.debit, credit: acc.credit + m.credit }),
         { debit: 0, credit: 0 },
       ),
-    [pageItems],
+    [filtered],
   );
 
   return (
@@ -260,31 +262,34 @@ export function MembersDirectory({ members }: { members: MemberRow[] }) {
             );
           })}
 
-          {/* Grand total for this page only, not the whole filtered list. */}
+          {/* Grand total across every filtered member - shown once, only on
+              the last page, not repeated per page. */}
+          {isLastPage && (
           <div className="flex flex-wrap items-center gap-3 rounded-[20px] border-2 border-border bg-muted/40 px-4 py-3.5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span className="w-6 shrink-0" />
               <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold text-muted-foreground">
                 &Sigma;
               </span>
-              <div className="min-w-0 flex-1 text-[13px] font-bold">Page Total</div>
+              <div className="min-w-0 flex-1 text-[13px] font-bold">Grand Total</div>
             </div>
             <div className="flex w-full items-center gap-4 pt-3 sm:w-auto sm:gap-3 sm:border-t-0 sm:pt-0">
               <div className="flex-1 text-[13px] sm:w-[85px] sm:flex-none sm:text-right">
                 <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Debit</div>
-                <DebitCell debit={pageTotals.debit} bold />
+                <DebitCell debit={grandTotals.debit} bold />
               </div>
               <div className="flex-1 text-[13px] sm:w-[85px] sm:flex-none sm:text-right">
                 <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Credit</div>
-                <CreditCell credit={pageTotals.credit} bold />
+                <CreditCell credit={grandTotals.credit} bold />
               </div>
               <div className="flex-1 text-[13px] sm:w-[85px] sm:flex-none sm:text-right">
                 <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:hidden">Balance</div>
-                <BalanceCell balance={pageTotals.debit - pageTotals.credit} bold />
+                <BalanceCell balance={grandTotals.debit - grandTotals.credit} bold />
               </div>
               <span className="shrink-0 sm:w-[62px]" />
             </div>
           </div>
+          )}
         </div>
       )}
 
