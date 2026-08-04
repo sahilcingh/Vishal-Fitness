@@ -19,21 +19,21 @@ export function MembersExportButton({ members }: { members: MemberRow[] }) {
     setExporting(true);
     await new Promise((r) => setTimeout(r, 50));
     try {
-      const lines = ["Name,Phone,Membership No,Member Since,Debit,Credit"];
-      for (const m of members) {
-        const debit = m.balance > 0 ? m.balance : 0;
-        const credit = m.balance < 0 ? -m.balance : 0;
+      const lines = ["S.No.,Name,Phone,Membership No,Member Since,Debit,Credit,Balance"];
+      members.forEach((m, i) => {
         lines.push(
           [
+            String(i + 1),
             csvValue(m.full_name ?? "Member"),
             csvForceText(m.phone ?? ""),
             csvValue(membershipNo(m.id)),
             csvValue(new Date(m.created_at).toLocaleDateString("en-GB")),
-            debit.toFixed(0),
-            credit.toFixed(0),
+            m.debit.toFixed(0),
+            m.credit.toFixed(0),
+            m.balance.toFixed(0),
           ].join(","),
         );
-      }
+      });
       const now = new Date();
       const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
       downloadCsv(lines.join("\n"), `members_ledger_${stamp}.csv`);

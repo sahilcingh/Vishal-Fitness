@@ -28,19 +28,26 @@ export default async function MembersLedgerPage() {
 
   // Same Debit (charge) / Credit (payment) math as the individual member
   // ledger, aggregated per member so the directory can show at a glance who
-  // still owes money vs. who's overpaid.
-  const balanceByUser = new Map<string, number>();
+  // still owes money vs. who's overpaid. Debit and Credit are tracked as
+  // independent running totals (not netted against each other) so the
+  // directory can show both side by side, same as a real trial balance.
+  const debitByUser = new Map<string, number>();
+  const creditByUser = new Map<string, number>();
   for (const s of subsRes.data ?? []) {
     const fee = s.pass_price ?? 0;
     const discount = s.discount_amount ?? 0;
     const netPayable = Math.max(fee - discount, 0);
-    balanceByUser.set(s.user_id, (balanceByUser.get(s.user_id) ?? 0) + netPayable);
+    debitByUser.set(s.user_id, (debitByUser.get(s.user_id) ?? 0) + netPayable);
   }
   for (const p of paymentsRes.data ?? []) {
-    balanceByUser.set(p.user_id, (balanceByUser.get(p.user_id) ?? 0) - (p.amount ?? 0));
+    creditByUser.set(p.user_id, (creditByUser.get(p.user_id) ?? 0) + (p.amount ?? 0));
   }
 
-  const members: MemberRow[] = (profilesRes.data ?? []).map((m) => ({ ...m, balance: balanceByUser.get(m.id) ?? 0 }));
+  const members: MemberRow[] = (profilesRes.data ?? []).map((m) => {
+    const debit = debitByUser.get(m.id) ?? 0;
+    const credit = creditByUser.get(m.id) ?? 0;
+    return { ...m, debit, credit, balance: debit - credit };
+  });
 
   return (
     <div>
