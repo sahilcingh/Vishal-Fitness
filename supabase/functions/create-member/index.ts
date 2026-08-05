@@ -151,13 +151,17 @@ Deno.serve(async (req) => {
 
     const userId = authData.user.id
 
-    // Insert profile
+    // Insert profile - needs_password_reset is set here (service-role,
+    // atomic with the rest of this row) rather than as a separate client-side
+    // update after the fact, so it can't be blocked by the regular-session
+    // column grants that intentionally restrict who can write this field.
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
       full_name: (name as string).trim(),
       phone: (phone as string).trim(),
       gender: gender || null,
       address: address || null,
+      needs_password_reset: true,
       updated_at: new Date().toISOString(),
     })
 

@@ -602,10 +602,17 @@ export function AddMemberForm({
 
       const photoUrl = await uploadPhotoIfAny(userId);
       const photoFailed = !!photoFile && !photoUrl;
-      const profileUpdate: Record<string, unknown> = { needs_password_reset: true };
+      // needs_password_reset is set by create-member itself now (service-role,
+      // atomic with account creation) - only time_slot/photo_url are patched
+      // here, and only if there's actually something to patch.
+      const profileUpdate: Record<string, unknown> = {};
       if (timeSlot.trim()) profileUpdate.time_slot = timeSlot.trim();
       if (photoUrl) profileUpdate.photo_url = photoUrl;
-      const { error: profileErr } = await supabase.from("profiles").update(profileUpdate).eq("id", userId);
+      let profileErr: { message?: string } | null = null;
+      if (Object.keys(profileUpdate).length > 0) {
+        const { error } = await supabase.from("profiles").update(profileUpdate).eq("id", userId);
+        profileErr = error;
+      }
 
       if (paymentFailed || profileErr || photoFailed) {
         // The member account itself was created successfully - don't lose
@@ -613,7 +620,7 @@ export function AddMemberForm({
         // follow-up rather than silently showing a false success.
         const issues = [
           paymentFailed && `recording the ${formatINR(newPaidTotal)} payment failed - add it manually from the Subscriptions page`,
-          profileErr && "saving the time slot/forced-password-reset flag failed - edit the member to retry",
+          profileErr && "saving the time slot failed - edit the member to retry",
           !profileErr && photoFailed && "the photo upload failed - edit the member to retry",
         ].filter(Boolean);
         setDialog({
