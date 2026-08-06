@@ -348,7 +348,6 @@ export default async function ReportsPage() {
     revenueByPassMap.set(name, entry);
   }
   const revenueByPassEntries = Array.from(revenueByPassMap.entries());
-  const revenueByPassGrand = revenueByPassEntries.reduce((sum, [, v]) => sum + v.total, 0);
   const revenueByPassRows: ReportRow[] = revenueByPassEntries.map(([name, v]) => [
     name,
     v.price.toFixed(0),
@@ -452,7 +451,6 @@ export default async function ReportsPage() {
     r.balance.toFixed(0),
   ]);
 
-  const actualMonthlyTotal = paymentsThisMonth.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const actualMonthlyRows: ReportRow[] = paymentsThisMonth.map((p) => [
     p.subscriptions?.profiles?.full_name ?? "",
     p.subscriptions?.profiles?.phone ?? "",
@@ -597,7 +595,6 @@ export default async function ReportsPage() {
           columns={paymentCols.collection}
           rows={dailyCollectionRows}
           csvFileName={`daily_collection_${stamp(now)}.csv`}
-          csvFooterLines={["", `,,,,,GRAND TOTAL (₹),${dailyCollectionGrand.toFixed(0)}`]}
         />
         <ReportCard
           title="Monthly Collection"
@@ -606,7 +603,6 @@ export default async function ReportsPage() {
           columns={paymentCols.collection}
           rows={monthlyCollectionRows}
           csvFileName={`monthly_collection_${stamp(now)}.csv`}
-          csvFooterLines={["", `,,,,,GRAND TOTAL (₹),${monthlyCollectionGrand.toFixed(0)}`]}
         />
         <ReportCard
           title="Pending Renewals / Dues"
@@ -623,7 +619,6 @@ export default async function ReportsPage() {
           columns={paymentCols.revenueByPass}
           rows={revenueByPassRows}
           csvFileName={`revenue_by_pass_${stamp(now)}.csv`}
-          csvFooterLines={["", `,,GRAND TOTAL (₹),${revenueByPassGrand.toFixed(0)}`]}
         />
         <ReportCard
           title="Installment Payment Log"
@@ -640,7 +635,6 @@ export default async function ReportsPage() {
           columns={paymentCols.outstanding}
           rows={outstandingBalancesRows}
           csvFileName={`outstanding_balances_${stamp(now)}.csv`}
-          csvFooterLines={["", `,,,,,TOTAL OUTSTANDING (₹),${outstandingTotal.toFixed(0)}`]}
         />
         <ReportCard
           title="Actual Monthly Collections"
@@ -649,7 +643,6 @@ export default async function ReportsPage() {
           columns={paymentCols.actualMonthly}
           rows={actualMonthlyRows}
           csvFileName={`actual_monthly_collection_${stamp(now)}.csv`}
-          csvFooterLines={["", `,,,TOTAL COLLECTED (₹),${actualMonthlyTotal.toFixed(0)}`]}
         />
       </Section>
 

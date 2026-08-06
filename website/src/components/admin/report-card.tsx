@@ -52,6 +52,15 @@ export function ReportCard({
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageRows = paginate(rows, page, PAGE_SIZE);
 
+  // Grand total across every row (not just the current page) for each
+  // *currency* column only - a plain "number" column (Days Left, Total
+  // Visits, ...) isn't a price and summing it wouldn't mean anything. A
+  // report with no currency column has nothing to total, so no row is shown.
+  const numericColIdx = columns.map((c, i) => (c.kind === "currency" ? i : -1)).filter((i) => i >= 0);
+  const columnTotals = numericColIdx.length
+    ? columns.map((_, i) => (numericColIdx.includes(i) ? rows.reduce((sum, r) => sum + (Number(r[i]) || 0), 0) : null))
+    : null;
+
   async function handleExport() {
     setExporting(true);
     // Without a real await between setExporting(true) and the (synchronous)
@@ -59,18 +68,22 @@ export function ReportCard({
     // the spinner never gets a chance to paint. This tick gives it one.
     await new Promise((r) => setTimeout(r, 50));
     try {
-      const lines = [columns.map((c) => c.header).join(",")];
-      for (const row of rows) {
+      const lines = [["#", ...columns.map((c) => c.header)].join(",")];
+      rows.forEach((row, i) => {
         lines.push(
-          row
-            .map((cell, i) => {
-              const kind = columns[i]?.kind ?? "text";
+          [
+            String(i + 1),
+            ...row.map((cell, j) => {
+              const kind = columns[j]?.kind ?? "text";
               if (kind === "number" || kind === "currency") return cell;
               if (kind === "phone" || kind === "date") return csvForceText(cell);
               return csvValue(cell);
-            })
-            .join(","),
+            }),
+          ].join(","),
         );
+      });
+      if (columnTotals) {
+        lines.push(["GRAND TOTAL", ...columnTotals.map((t) => (t === null ? "" : t.toFixed(0)))].join(","));
       }
       if (csvFooterLines?.length) lines.push(...csvFooterLines);
       downloadCsv(lines.join("\n"), csvFileName);
@@ -129,6 +142,7 @@ export function ReportCard({
             <table className="w-full min-w-max text-left text-[12px]">
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">#</th>
                   {columns.map((c) => (
                     <th
                       key={c.header}
@@ -144,6 +158,7 @@ export function ReportCard({
               <tbody className="divide-y divide-border">
                 {pageRows.map((row, i) => (
                   <tr key={i}>
+                    <td className="num whitespace-nowrap px-3 py-2 text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</td>
                     {row.map((cell, j) => {
                       const kind = columns[j]?.kind ?? "text";
                       const isNum = kind === "number" || kind === "currency";
@@ -160,6 +175,24 @@ export function ReportCard({
                   </tr>
                 ))}
               </tbody>
+              {columnTotals && (
+                <tfoot className="sticky bottom-0 bg-card">
+                  <tr className="border-t-2 border-border font-bold">
+                    <td className="whitespace-nowrap px-3 py-2" colSpan={numericColIdx[0] + 1}>
+                      Grand Total
+                    </td>
+                    {columns.slice(numericColIdx[0]).map((c, i) => {
+                      const total = columnTotals[numericColIdx[0] + i];
+                      if (total === null) return <td key={i} />;
+                      return (
+                        <td key={i} className="num whitespace-nowrap px-3 py-2 text-right">
+                          {c.kind === "currency" ? formatINR(total) : total.toLocaleString("en-IN")}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tfoot>
+              )}
             </table>
           )}
         </div>
