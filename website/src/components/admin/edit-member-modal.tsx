@@ -102,6 +102,20 @@ export function EditMemberModal({
   const [originalStartDate, setOriginalStartDate] = useState("");
   const [entryDate, setEntryDate] = useState(toYMD(new Date()));
   const [originalEntryDate, setOriginalEntryDate] = useState("");
+  // Date defaults to following Start Date - until the admin edits Date
+  // directly (or this subscription already has its own real, previously
+  // saved Date), at which point it stops following. Prevents "fix a typo in
+  // Start Date" from silently leaving an already-wrong Date unchanged, while
+  // never clobbering a legitimately different existing Date on load.
+  const [entryDateTouched, setEntryDateTouched] = useState(true);
+  function changeStartDate(v: string) {
+    setStartDate(v);
+    if (!entryDateTouched) setEntryDate(v);
+  }
+  function changeEntryDate(v: string) {
+    setEntryDate(v);
+    setEntryDateTouched(true);
+  }
   const [passPrice, setPassPrice] = useState("");
   const [originalPassPrice, setOriginalPassPrice] = useState("");
   const [storedEndDate, setStoredEndDate] = useState("");
@@ -216,6 +230,9 @@ export function EditMemberModal({
         setPassPrice(loadedPrice);
         setOriginalPassPrice(loadedPrice);
         setStoredEndDate(normalizeYMD(sub.end_date));
+        // A real, already-saved subscription - never auto-overwrite its
+        // Date just because Start Date gets tweaked.
+        setEntryDateTouched(true);
       } else {
         setSubscriptionId(null);
         setPassId("");
@@ -227,6 +244,9 @@ export function EditMemberModal({
         setPassPrice("");
         setOriginalPassPrice("");
         setStoredEndDate("");
+        // No real subscription yet - blank slate, so Date should follow
+        // Start Date until the admin deliberately changes it.
+        setEntryDateTouched(false);
       }
       setExtraDays("");
       setLoading(false);
@@ -558,8 +578,8 @@ export function EditMemberModal({
                     }}
                   />
                 </div>
-                <Field label="Date" type="date" value={entryDate} onChange={setEntryDate} />
-                <Field label="Start Date" type="date" value={startDate} onChange={setStartDate} />
+                <Field label="Date" type="date" value={entryDate} onChange={changeEntryDate} />
+                <Field label="Start Date" type="date" value={startDate} onChange={changeStartDate} />
                 <Field
                   label="Extra Days"
                   value={extraDays}

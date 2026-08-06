@@ -166,6 +166,20 @@ export function AddMemberForm({
   const [passId, setPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
   const [entryDate, setEntryDate] = useState(toYMD(new Date()));
+  // Date defaults to following Start Date - until the admin edits Date
+  // directly, at which point it stops following (so "paid today, membership
+  // starts next week" still works). Without this, backdating Start Date
+  // alone silently leaves Date at today, showing a "Subscribed to..." ledger
+  // entry on the wrong day.
+  const [entryDateTouched, setEntryDateTouched] = useState(false);
+  function changeStartDate(v: string) {
+    setStartDate(v);
+    if (!entryDateTouched) setEntryDate(v);
+  }
+  function changeEntryDate(v: string) {
+    setEntryDate(v);
+    setEntryDateTouched(true);
+  }
   const [extraDays, setExtraDays] = useState("");
 
   const [isPercent, setIsPercent] = useState(false);
@@ -257,6 +271,7 @@ export function AddMemberForm({
     setPassId("");
     setStartDate(toYMD(new Date()));
     setEntryDate(toYMD(new Date()));
+    setEntryDateTouched(false);
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -439,6 +454,7 @@ export function AddMemberForm({
     setPassId("");
     setStartDate(toYMD(new Date()));
     setEntryDate(toYMD(new Date()));
+    setEntryDateTouched(false);
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -902,7 +918,7 @@ export function AddMemberForm({
             {addingNewMembership && (
               <div className="mb-1 flex justify-end">
                 <div className="w-[172px]">
-                  <Field label="Date *" type="date" value={entryDate} onChange={setEntryDate} />
+                  <Field label="Date *" type="date" value={entryDate} onChange={changeEntryDate} />
                 </div>
               </div>
             )}
@@ -1023,7 +1039,7 @@ export function AddMemberForm({
                   error={fieldErrors.pass}
                 />
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-                  <Field label="Start Date *" type="date" value={startDate} onChange={setStartDate} />
+                  <Field label="Start Date *" type="date" value={startDate} onChange={changeStartDate} />
                   <Field
                     label="Extra Days (optional)"
                     hint="e.g. 5"

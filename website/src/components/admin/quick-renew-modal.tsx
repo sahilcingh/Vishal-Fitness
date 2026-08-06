@@ -93,6 +93,20 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
   const [passId, setPassId] = useState("");
   const [startDate, setStartDate] = useState(toYMD(new Date()));
   const [entryDate, setEntryDate] = useState(toYMD(new Date()));
+  // Date defaults to following Start Date - until the admin edits Date
+  // directly, at which point it stops following (so "paid today, membership
+  // starts next week" still works). Without this, backdating Start Date
+  // alone silently leaves Date at today, showing a "Subscribed to..." ledger
+  // entry on the wrong day.
+  const [entryDateTouched, setEntryDateTouched] = useState(false);
+  function changeStartDate(v: string) {
+    setStartDate(v);
+    if (!entryDateTouched) setEntryDate(v);
+  }
+  function changeEntryDate(v: string) {
+    setEntryDate(v);
+    setEntryDateTouched(true);
+  }
   const [extraDays, setExtraDays] = useState("");
   const [isPercent, setIsPercent] = useState(false);
   const [discount, setDiscount] = useState("");
@@ -112,6 +126,7 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
     setPassId("");
     setStartDate(toYMD(new Date()));
     setEntryDate(toYMD(new Date()));
+    setEntryDateTouched(false);
     setExtraDays("");
     setIsPercent(false);
     setDiscount("");
@@ -395,8 +410,8 @@ export function QuickRenewModal({ open, onClose, passes }: { open: boolean; onCl
                   }}
                 />
                 <div className="grid grid-cols-2 gap-3">
-                  <MiniField label="Date" type="date" value={entryDate} onChange={setEntryDate} />
-                  <MiniField label="Start Date" type="date" value={startDate} onChange={setStartDate} />
+                  <MiniField label="Date" type="date" value={entryDate} onChange={changeEntryDate} />
+                  <MiniField label="Start Date" type="date" value={startDate} onChange={changeStartDate} />
                 </div>
                 <MiniField
                   label="Extra Days"
